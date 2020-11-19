@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: e9213db85603d54d240e0bfa87cdc12d59bab53241681d40f8299e3a523dd24a
+-- hash: d8c0165f7913349793b7285a8cc159215bffd53688fa7f55a06a17bc5d43d333
 
 name:           statistics-probability
 version:        0.1.0.0
@@ -36,18 +36,6 @@ library
       src
   build-depends:
       base >=4.7 && <5
-  default-language: Haskell2010
-
-executable statistics-probability-exe
-  main-is: Main.hs
-  other-modules:
-      Paths_statistics_probability
-  hs-source-dirs:
-      app
-  ghc-options: -threaded -rtsopts -with-rtsopts=-N
-  build-depends:
-      base >=4.7 && <5
-    , statistics-probability
   default-language: Haskell2010
 
 test-suite statistics-probability-test

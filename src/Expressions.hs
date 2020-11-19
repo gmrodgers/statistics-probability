@@ -12,6 +12,7 @@ module Expressions
       ),
     eval,
     diff,
+    integrate,
     integrateWithin,
   )
 where
@@ -43,73 +44,64 @@ eval (Var x) vals = lookup x vals
 eval (Val a) _ = a
 
 diff' :: Expr -> Expr
-diff' (Add x y) = Add (diff' x) (diff' y)
-diff' (Sub x y) = Sub (diff' x) (diff' y)
-diff' (Mult x y) =
-  Add (Mult (diff' x) y) (Mult (diff' y) x)
-diff' (Div x y) =
-  Div
-    ( Sub
-        (Mult (diff' x) y)
-        (Mult (diff' y) x)
-    )
-    (Pow y (Val 2))
-diff' (Pow x (Val a)) =
-  Mult
-    (Val a)
-    (Pow x (Sub (Val a) (Val 1)))
-diff' (E x) =
-  Mult (diff' x) (E x)
-diff' (Ln x) = Div (diff x) x
-diff' (Var _) = Val 1
-diff' (Val _) = Val 0
+diff' (Add x y) = Add (diff' x) (diff' y) -- Addition Rule
+diff' (Sub x y) = Sub (diff' x) (diff' y) -- Subtraction Rule
+diff' (Mult x y) = Add (Mult (diff' x) y) (Mult (diff' y) x) -- Product Rule
+diff' (Div x y) = Div (Sub (Mult (diff' x) y) (Mult (diff' y) x)) (Pow y (Val 2)) -- Quotient Rule
+diff' (Pow x (Val a)) = Mult (Val a) (Pow x (Sub (Val a) (Val 1))) -- Power Rule
+diff' (E x) = Mult (diff' x) (E x) -- e Exponent
+diff' (Ln x) = Div (diff x) x -- Natural Log
+diff' (Var _) = Val 1 -- Unitary Power
+diff' (Val _) = Val 0 -- Constant
 
 simplify :: Expr -> Expr
-simplify (Add (Val a) (Val b)) = Val (a + b)
-simplify (Add x (Val 0)) = simplify x
-simplify (Add (Val 0) y) = simplify y
-simplify (Add x y) = Add (simplify x) (simplify y)
-simplify (Sub (Val a) (Val b)) = Val (a - b)
-simplify (Sub x (Val 0)) = simplify x
-simplify (Sub x y) = Sub (simplify x) (simplify y)
-simplify (Mult (Val a) (Val b)) = Val (a * b)
-simplify (Mult (Val 1) y) = simplify y
-simplify (Mult x (Val 1)) = simplify x
-simplify (Mult (Val 0) _) = Val 0
-simplify (Mult _ (Val 0)) = Val 0
-simplify (Mult x y) = Mult (simplify x) (simplify y)
-simplify (Div (Val a) (Val b)) = Val (a / b)
-simplify (Div (Val 0) y) = Val 0
-simplify (Div x (Val 1)) = simplify x
-simplify (Div x y) = Div (simplify x) (simplify y)
-simplify (Pow x (Val 1)) = simplify x
-simplify (Pow _ (Val 0)) = Val 1
-simplify (Pow x y) = Pow (simplify x) (simplify y)
-simplify (E (Ln (Val 1))) = Val 1
-simplify (E x) = E (simplify x)
-simplify (Ln (Val 1)) = Val 0
-simplify (Ln (E (Val 1))) = Val 1
-simplify (Ln x) = Ln (simplify x)
-simplify x = x
+simplify (Add (Val a) (Val b)) = Val (a + b) -- 1 + 1 = 2
+simplify (Add x (Val 0)) = simplify x -- x + 0 = x
+simplify (Add (Val 0) y) = simplify y -- 0 + y = y
+simplify (Add x y) = Add (simplify x) (simplify y) -- Simplify down the tree
+simplify (Sub (Val a) (Val b)) = Val (a - b) -- 2 - 1 = 0
+simplify (Sub x (Val 0)) = simplify x -- x - 0 = x
+simplify (Sub x y) = Sub (simplify x) (simplify y) -- Simplify down the tree
+simplify (Mult (Val a) (Val b)) = Val (a * b) -- 1 * 2 = 2
+simplify (Mult (Val 1) y) = simplify y -- 1 * y = y
+simplify (Mult x (Val 1)) = simplify x -- x * 1 = x
+simplify (Mult (Val 0) _) = Val 0 -- 0 * x = 0
+simplify (Mult _ (Val 0)) = Val 0 -- x * 0 = 0
+simplify (Mult (Pow x (Val a)) (Pow y (Val b))) = if x == y then Pow (simplify x) (Val (a + b)) else Mult (Pow (simplify x) (Val a)) (Pow (simplify y) (Val b)) -- x^1 * x^2 = x^3
+simplify (Mult x y) = Mult (simplify x) (simplify y) -- Simplify down the tree
+simplify (Div (Val a) (Val b)) = Val (a / b) -- 2 / 1 = 2
+simplify (Div (Val 0) y) = Val 0 -- 0 / x = 0
+simplify (Div x (Val 1)) = simplify x -- x / 1 = x
+simplify (Div (Pow x (Val a)) (Pow y (Val b))) = if x == y then Pow (simplify x) (Val (a - b)) else Div (Pow (simplify x) (Val a)) (Pow (simplify y) (Val b)) -- x^2 / x^1 = x^1
+simplify (Div x y) = Div (simplify x) (simplify y) -- Simplify down the tree
+simplify (Pow x (Val 1)) = simplify x -- x^1 = x
+simplify (Pow _ (Val 0)) = Val 1 -- x^0 = 1
+simplify (Pow x y) = Pow (simplify x) (simplify y) -- Simplify down the tree
+simplify (E (Ln (Val 1))) = Val 1 -- e^lnx = 1
+simplify (E x) = E (simplify x) -- Simplify down the tree
+simplify (Ln (Val 1)) = Val 0 -- ln1 = 0
+simplify (Ln (E (Val 1))) = Val 1 -- ln(e*x) = 1
+simplify (Ln x) = Ln (simplify x) -- Simplify down the tree
+simplify x = x -- if none of the above, then return
 
 diff :: Expr -> Expr
-diff = simplify . simplify . diff'
+diff = simplify . simplify . diff' -- Simplify twice incase a simplify reveals previously uncaught simplifies (arbitrary)
 
 integrate' :: Expr -> String -> Expr
-integrate' (Add x y) wrt = Add (integrate' x wrt) (integrate' y wrt)
-integrate' (Sub x y) wrt = Sub (integrate' x wrt) (integrate' y wrt)
-integrate' (Mult x (Val a)) wrt = Mult (Val a) (integrate' x wrt)
-integrate' (Mult (Val a) y) wrt = Mult (Val a) (integrate' y wrt)
-integrate' (Div x (Val a)) wrt = Div (integrate' x wrt) (Val a)
-integrate' (Div (Val a) y) wrt = Div (Val a) (integrate' (Div (Val 1) y) wrt)
-integrate' (Pow z (Mult x y)) wrt = Add (integrate' (Pow z x) wrt) (integrate' (Pow z y) wrt)
-integrate' (Pow z (Div x y)) wrt = Sub (integrate' (Pow z x) wrt) (integrate' (Pow z y) wrt)
-integrate' (Pow (Var x) (Val a)) _ = Div (Pow (Var x) (Sub (Val a) (Val 1))) (Sub (Val a) (Val 1))
-integrate' (Pow (Val a) (Var x)) _ = Div (Pow (Val a) (Var x)) (Ln (Val a))
-integrate' (E (Val a)) wrt = Mult (E (Val a)) (Var wrt)
-integrate' (E x) _ = Div (E x) (diff' x)
-integrate' (Var x) wrt = integrate' (Pow (Var x) (Val 1)) wrt
-integrate' (Val a) wrt = Mult (Val a) (Var wrt)
+integrate' (Add x y) wrt = Add (integrate' x wrt) (integrate' y wrt) -- Integrate down the tree
+integrate' (Sub x y) wrt = Sub (integrate' x wrt) (integrate' y wrt) -- Integrate down the tree
+integrate' (Mult x (Val a)) wrt = Mult (Val a) (integrate' x wrt) -- ignore constant
+integrate' (Mult (Val a) y) wrt = Mult (Val a) (integrate' y wrt) -- ignore constant, should there be an Integration by parts?
+integrate' (Div x (Val a)) wrt = Div (integrate' x wrt) (Val a) -- ignore constant
+integrate' (Div (Val a) y) wrt = Div (Val a) (integrate' (Div (Val 1) y) wrt) -- ignore constant
+integrate' (Pow z (Add x y)) wrt = Mult (integrate' (Pow z x) wrt) (integrate' (Pow z y) wrt) -- I(e^(x+y)) = I(e^x) * I(e^y)
+integrate' (Pow z (Sub x y)) wrt = Div (integrate' (Pow z x) wrt) (integrate' (Pow z y) wrt) -- I(e^(x-y)) = I(e^x) / I(e^y)
+integrate' (Pow (Var x) (Val a)) _ = Div (Pow (Var x) (Add (Val a) (Val 1))) (Add (Val a) (Val 1)) -- normal integration rule
+integrate' (Pow (Val a) (Var x)) _ = Div (Pow (Val a) (Var x)) (Ln (Val a)) -- 2^x -> 2^x / ln2
+integrate' (E (Val a)) wrt = Mult (E (Val a)) (Var wrt) -- e*2 -> x * e^2
+integrate' (E x) _ = Div (E x) (diff' x) -- e^f(x) -> e^f(x) / f'(x)
+integrate' (Var x) wrt = integrate' (Pow (Var x) (Val 1)) wrt -- x -> x^1 then integrate
+integrate' (Val a) wrt = Mult (Val a) (Var wrt) -- add variable we're integrated wrt
 
 integrate :: Expr -> String -> Expr
 integrate x wrt = Add (simplify . simplify $ integrate' x wrt) (Var "C")
