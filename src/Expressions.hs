@@ -6,6 +6,7 @@ module Expressions
     integrateH,
     integrate,
     integrateWithin,
+    simplifyTilStable,
   )
 where
 
@@ -40,10 +41,10 @@ diffH (Add x y) = Add (diffH x) (diffH y) -- Addition Rule
 diffH (Sub x y) = Sub (diffH x) (diffH y) -- Subtraction Rule
 diffH (Mult x y) = Add (Mult (diffH x) y) (Mult (diffH y) x) -- Product Rule
 diffH (Div x y) = Div (Sub (Mult (diffH x) y) (Mult (diffH y) x)) (Pow y (Val 2)) -- Quotient Rule
-diffH (Pow x (Val a)) = Mult (Val a) (Pow x (Sub (Val a) (Val 1))) -- Power Rule
-diffH (E x) = Mult (diffH x) (E x) -- e Exponent
 diffH (Var _) = Val 1 -- Unitary Power
 diffH (Val _) = Val 0 -- Constant
+diffH (Pow x (Val a)) = Mult (diffH x) (Mult (Val a) (Pow x (Sub (Val a) (Val 1)))) -- Power Rule
+diffH (E x) = Mult (diffH x) (E x) -- e Exponent
 diffH (Ln x) = Mult (Div (Val 1) x) (diffH x)
 
 -- chain rule?
@@ -62,12 +63,14 @@ simplify (Mult x (Val 1)) = simplify x -- x * 1 = x
 simplify (Mult (Val 0) _) = Val 0 -- 0 * x = 0
 simplify (Mult _ (Val 0)) = Val 0 -- x * 0 = 0
 simplify (Mult (Pow x (Val a)) (Pow y (Val b))) = if x == y then Pow (simplify x) (Val (a + b)) else Mult (Pow (simplify x) (Val a)) (Pow (simplify y) (Val b)) -- x^1 * x^2 = x^3
+simplify (Mult (Div (Val 1) x) y) = Div (simplify y) (simplify x)
+simplify (Mult y (Div (Val 1) x)) = Div (simplify y) (simplify x)
 simplify (Mult x y) = Mult (simplify x) (simplify y) -- Simplify down the tree
 simplify (Div (Val a) (Val b)) = Val (a / b) -- 2 / 1 = 2
 simplify (Div (Val 0) _) = Val 0 -- 0 / x = 0
 simplify (Div x (Val 1)) = simplify x -- x / 1 = x
 simplify (Div (Pow x (Val a)) (Pow y (Val b))) = if x == y then Pow (simplify x) (Val (a - b)) else Div (Pow (simplify x) (Val a)) (Pow (simplify y) (Val b)) -- x^2 / x^1 = x^1
-simplify (Div x y) = Div (simplify x) (simplify y) -- Simplify down the tree
+simplify (Div x y) = if x == y then Val 1 else Div (simplify x) (simplify y)
 simplify (Pow x (Val 1)) = simplify x -- x^1 = x
 simplify (Pow _ (Val 0)) = Val 1 -- x^0 = 1
 simplify (Pow x y) = Pow (simplify x) (simplify y) -- Simplify down the tree
@@ -77,6 +80,9 @@ simplify (Ln (Val 1)) = Val 0 -- ln1 = 0
 simplify (Ln (E (Val 1))) = Val 1 -- ln(e*x) = 1
 simplify (Ln x) = Ln (simplify x) -- Simplify down the tree
 simplify x = x -- if none of the above, then return
+
+simplifyTilStable :: Expr -> Expr
+simplifyTilStable = last . take 6 . iterate simplify
 
 diff :: Expr -> Expr
 diff = simplify . simplify . diffH -- Simplify twice incase a simplify reveals previously uncaught simplifies (arbitrary)
