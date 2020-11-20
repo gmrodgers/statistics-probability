@@ -1,20 +1,10 @@
 module Expressions
-  ( Expr
-      ( Add,
-        Sub,
-        Mult,
-        Div,
-        Pow,
-        E,
-        Ln,
-        Var,
-        Val
-      ),
-    diff,
+  ( Expr (..),
     eval,
+    diffH,
+    diff,
     integrate,
     integrateWithin,
-    simplify,
   )
 where
 
@@ -44,16 +34,17 @@ eval (Var x) vals = lookup x vals
     lookup k = snd . head . filter ((== k) . fst)
 eval (Val a) _ = a
 
-diff' :: Expr -> Expr
-diff' (Add x y) = Add (diff' x) (diff' y) -- Addition Rule
-diff' (Sub x y) = Sub (diff' x) (diff' y) -- Subtraction Rule
-diff' (Mult x y) = Add (Mult (diff' x) y) (Mult (diff' y) x) -- Product Rule
-diff' (Div x y) = Div (Sub (Mult (diff' x) y) (Mult (diff' y) x)) (Pow y (Val 2)) -- Quotient Rule
-diff' (Pow x (Val a)) = Mult (Val a) (Pow x (Sub (Val a) (Val 1))) -- Power Rule
-diff' (E x) = Mult (diff' x) (E x) -- e Exponent
-diff' (Ln x) = Div (diff x) x -- Natural Log
-diff' (Var _) = Val 1 -- Unitary Power
-diff' (Val _) = Val 0 -- Constant
+diffH :: Expr -> Expr
+diffH (Add x y) = Add (diffH x) (diffH y) -- Addition Rule
+diffH (Sub x y) = Sub (diffH x) (diffH y) -- Subtraction Rule
+diffH (Mult x y) = Add (Mult (diffH x) y) (Mult (diffH y) x) -- Product Rule
+diffH (Div x y) = Div (Sub (Mult (diffH x) y) (Mult (diffH y) x)) (Pow y (Val 2)) -- Quotient Rule
+diffH (Pow x (Val a)) = Mult (Val a) (Pow x (Sub (Val a) (Val 1))) -- Power Rule
+diffH (E x) = Mult (diffH x) (E x) -- e Exponent
+diffH (Ln (Var x)) = Div (Val 1) (Var x) -- Natural Log
+diffH (Var _) = Val 1 -- Unitary Power
+diffH (Val _) = Val 0 -- Constant
+-- chain rule?
 
 simplify :: Expr -> Expr
 simplify (Add (Val a) (Val b)) = Val (a + b) -- 1 + 1 = 2
@@ -86,7 +77,7 @@ simplify (Ln x) = Ln (simplify x) -- Simplify down the tree
 simplify x = x -- if none of the above, then return
 
 diff :: Expr -> Expr
-diff = simplify . simplify . diff' -- Simplify twice incase a simplify reveals previously uncaught simplifies (arbitrary)
+diff = simplify . simplify . diffH -- Simplify twice incase a simplify reveals previously uncaught simplifies (arbitrary)
 
 integrate' :: Expr -> String -> Expr
 integrate' (Add x y) wrt = Add (integrate' x wrt) (integrate' y wrt) -- Integrate down the tree
@@ -100,7 +91,7 @@ integrate' (Pow z (Sub x y)) wrt = Div (integrate' (Pow z x) wrt) (integrate' (P
 integrate' (Pow (Var x) (Val a)) _ = Div (Pow (Var x) (Add (Val a) (Val 1))) (Add (Val a) (Val 1)) -- normal integration rule
 integrate' (Pow (Val a) (Var x)) _ = Div (Pow (Val a) (Var x)) (Ln (Val a)) -- 2^x -> 2^x / ln2
 integrate' (E (Val a)) wrt = Mult (E (Val a)) (Var wrt) -- e*2 -> x * e^2
-integrate' (E x) _ = Div (E x) (diff' x) -- e^f(x) -> e^f(x) / f'(x)
+integrate' (E x) _ = Div (E x) (diffH x) -- e^f(x) -> e^f(x) / f'(x)
 integrate' (Var x) wrt = integrate' (Pow (Var x) (Val 1)) wrt -- x -> x^1 then integrate
 integrate' (Val a) wrt = Mult (Val a) (Var wrt) -- add variable we're integrated wrt
 
