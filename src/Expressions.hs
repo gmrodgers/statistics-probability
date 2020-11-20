@@ -47,8 +47,6 @@ diffH (Pow x (Val a)) = Mult (diffH x) (Mult (Val a) (Pow x (Sub (Val a) (Val 1)
 diffH (E x) = Mult (diffH x) (E x) -- e Exponent
 diffH (Ln x) = Mult (Div (Val 1) x) (diffH x)
 
--- chain rule?
-
 simplify :: Expr -> Expr
 simplify (Add (Val a) (Val b)) = Val (a + b) -- 1 + 1 = 2
 simplify (Add x (Val 0)) = simplify x -- x + 0 = x
@@ -63,6 +61,7 @@ simplify (Mult x (Val 1)) = simplify x -- x * 1 = x
 simplify (Mult (Val 0) _) = Val 0 -- 0 * x = 0
 simplify (Mult _ (Val 0)) = Val 0 -- x * 0 = 0
 simplify (Mult (Pow x (Val a)) (Pow y (Val b))) = if x == y then Pow (simplify x) (Val (a + b)) else Mult (Pow (simplify x) (Val a)) (Pow (simplify y) (Val b)) -- x^1 * x^2 = x^3
+simplify (Mult x (Pow y z)) = if x == y then Pow (simplify x) (Add (Val 1) z) else Mult x (Pow (simplify y) (simplify z))
 simplify (Mult (Div (Val 1) x) y) = Div (simplify y) (simplify x)
 simplify (Mult y (Div (Val 1) x)) = Div (simplify y) (simplify x)
 simplify (Mult x y) = Mult (simplify x) (simplify y) -- Simplify down the tree
@@ -87,7 +86,7 @@ simplifyTilStable x =
    in (fst . head . dropWhile (uncurry (/=))) $ zip (expr : exprs) exprs
 
 diff :: Expr -> Expr
-diff = simplify . simplify . diffH -- Simplify twice incase a simplify reveals previously uncaught simplifies (arbitrary)
+diff = simplifyTilStable . diffH -- Simplify twice incase a simplify reveals previously uncaught simplifies (arbitrary)
 
 integrateH :: Expr -> String -> Expr
 integrateH (Add x y) wrt = Add (integrateH x wrt) (integrateH y wrt) -- Integrate down the tree
@@ -103,7 +102,7 @@ integrateH (Var x) wrt = integrateH (Pow (Var x) (Val 1)) wrt -- x -> x^1 then i
 integrateH (Val a) wrt = Mult (Val a) (Var wrt) -- add variable we're integrated wrt
 
 integrate :: Expr -> String -> Expr
-integrate x wrt = Add (simplify . simplify $ integrateH x wrt) (Var "C")
+integrate x wrt = Add (simplifyTilStable $ integrateH x wrt) (Var "C")
 
 integrateWithin :: Expr -> String -> Float -> Float -> Float
 integrateWithin x wrt a b = eval integrated [(wrt, b)] - eval integrated [(wrt, a)]

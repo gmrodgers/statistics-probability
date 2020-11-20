@@ -6,7 +6,7 @@ module ContinuousDistribution
   )
 where
 
-import Expressions (Expr (..), integrateWithin)
+import Expressions (Expr (..), eval, integrateWithin)
 
 data ContinuousDist = Exp Float | Unif Float Float | Norm Float Float | Custom Expr Float Float
 
@@ -28,6 +28,12 @@ pdf (Exp la) = exponentialPDF la
 pdf (Unif a b) = uniformPDF a b
 pdf (Norm m v) = normalPDF m v
 pdf (Custom x _ _) = x
+
+numericalCDF :: ContinuousDist -> Float -> Float -> Int -> Float
+numericalCDF dist a b splits = (b - a) * sum (map (\y -> eval (pdf dist) [("x", y)]) pts) / fromIntegral splits
+  where
+    increment = (b - a) / fromIntegral splits
+    pts = take splits $ iterate (+ increment) a
 
 cdf :: ContinuousDist -> Float -> Float -> Float
 cdf dist = integrateWithin (pdf dist) "x"
