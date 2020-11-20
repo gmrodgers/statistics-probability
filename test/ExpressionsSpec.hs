@@ -92,10 +92,10 @@ diffSpec =
     describe "Mult" $
       it "follows the product rule: d/dx f(x)h(x) = f'(x)h(x) + f(x)h'(x)" $ do
         diffH (Mult (Val 2) (Var "x")) `shouldBe` Add (Mult (Val 0) (Var "x")) (Mult (Val 1) (Val 2))
-        diffH (Mult (Var "x") (Ln (Var "x"))) `shouldBe` Add (Mult (Val 1) (Ln (Var "x"))) (Mult (Div (Val 1) (Var "x")) (Var "x"))
+        diffH (Mult (Var "x") (Ln (Var "x"))) `shouldBe` Add (Mult (Val 1) (Ln (Var "x"))) (Mult (Mult (Div (Val 1) (Var "x")) (Val 1)) (Var "x"))
     describe "Div" $
       it "follows the quotient rule: d/dx f(x)/h(x) = [h(x)f'(x) - f(x)h'(x)] / h(x)^2" $
-        let numerator = Sub (Mult (Val 1) (Ln (Var "x"))) (Mult (Div (Val 1) (Var "x")) (Var "x"))
+        let numerator = Sub (Mult (Val 1) (Ln (Var "x"))) (Mult (Mult (Div (Val 1) (Var "x")) (Val 1)) (Var "x"))
             denominator = Pow (Ln (Var "x")) (Val 2)
          in diffH (Div (Var "x") (Ln (Var "x"))) `shouldBe` Div numerator denominator
     describe "E" $
@@ -106,7 +106,10 @@ diffSpec =
         diffH (E (Pow (Var "x") (Val 2))) `shouldBe` Mult (Mult (Val 2) (Pow (Var "x") (Sub (Val 2) (Val 1)))) (E (Pow (Var "x") (Val 2)))
     describe "Ln" $
       it "divides the differential of the operand by the operand" $ do
-        diffH (Ln (Var "x")) `shouldBe` Div (Val 1) (Var "x")
+        diffH (Ln (Var "x")) `shouldBe` Mult (Div (Val 1) (Var "x")) (Val 1)
+    describe "Chain Rule" $
+      it "applies chain rule: d/dx f(g(x)) = f'(g(x)) * g'(x)" $
+        diffH (Ln (Pow (Var "x") (Val 2))) `shouldBe` Mult (Div (Val 1.0) (Pow (Var "x") (Val 2.0))) (Mult (Val 2.0) (Pow (Var "x") (Sub (Val 2.0) (Val 1.0))))
 
 integrateSpec :: Spec
 integrateSpec =

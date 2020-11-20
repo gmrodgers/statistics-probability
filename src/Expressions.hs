@@ -42,9 +42,10 @@ diffH (Mult x y) = Add (Mult (diffH x) y) (Mult (diffH y) x) -- Product Rule
 diffH (Div x y) = Div (Sub (Mult (diffH x) y) (Mult (diffH y) x)) (Pow y (Val 2)) -- Quotient Rule
 diffH (Pow x (Val a)) = Mult (Val a) (Pow x (Sub (Val a) (Val 1))) -- Power Rule
 diffH (E x) = Mult (diffH x) (E x) -- e Exponent
-diffH (Ln (Var x)) = Div (Val 1) (Var x) -- Natural Log
 diffH (Var _) = Val 1 -- Unitary Power
 diffH (Val _) = Val 0 -- Constant
+diffH (Ln x) = Mult (Div (Val 1) x) (diffH x)
+
 -- chain rule?
 
 simplify :: Expr -> Expr
