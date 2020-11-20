@@ -7,6 +7,7 @@ import Expressions
   ( Expr (Add, Div, E, Ln, Mult, Pow, Sub, Val, Var),
     diffH,
     eval,
+    integrateH,
   )
 import Test.Hspec (Spec, describe, hspec, it, parallel, shouldBe)
 
@@ -14,6 +15,7 @@ main :: IO ()
 main = (hspec . parallel) $ do
   evalSpec
   diffSpec
+  integrateSpec
 
 evalSpec :: Spec
 evalSpec =
@@ -102,3 +104,35 @@ diffSpec =
     describe "Ln" $
       it "divides the differential of the operand by the operand" $ do
         diffH (Ln (Var "x")) `shouldBe` Div (Val 1) (Var "x")
+
+integrateSpec :: Spec
+integrateSpec =
+  describe "integrateH" $ do
+    describe "Val" $
+      it "multiplies by variable wrt" $ do
+        integrateH (Val 1) "x" `shouldBe` Mult (Val 1) (Var "x")
+        integrateH (Val 2) "y" `shouldBe` Mult (Val 2) (Var "y")
+    describe "Var" $
+      it "increments the power and divides by the new power" $
+        integrateH (Var "x") "x" `shouldBe` Div (Pow (Var "x") (Add (Val 1) (Val 1))) (Add (Val 1) (Val 1))
+    describe "Pow" $ do
+      it "a^x divides by the natural log of a" $
+        integrateH (Pow (Val 2) (Var "x")) "x" `shouldBe` Div (Pow (Val 2) (Var "x")) (Ln (Val 2))
+      it "x^a increments the power and divides by the new power" $ do
+        integrateH (Pow (Var "x") (Val 2)) "x" `shouldBe` Div (Pow (Var "x") (Add (Val 2) (Val 1))) (Add (Val 2) (Val 1))
+        integrateH (Pow (Var "x") (Val 0.5)) "x" `shouldBe` Div (Pow (Var "x") (Add (Val 0.5) (Val 1))) (Add (Val 0.5) (Val 1))
+        integrateH (Pow (Var "x") (Val (-0.5))) "x" `shouldBe` Div (Pow (Var "x") (Add (Val (-0.5)) (Val 1))) (Add (Val (-0.5)) (Val 1))
+    describe "Add" $
+      it "integrates the individual operands" $
+        integrateH (Add (Val 1) (Val 2)) "x" `shouldBe` Add (Mult (Val 1) (Var "x")) (Mult (Val 2) (Var "x"))
+    describe "Sub" $
+      it "integrates the individual operands" $
+        integrateH (Sub (Val 1) (Val 2)) "x" `shouldBe` Sub (Mult (Val 1) (Var "x")) (Mult (Val 2) (Var "x"))
+    describe "E" $ do
+      it "multiples by variable wrt if no variable" $
+        integrateH (E (Val 2)) "x" `shouldBe` Mult (E (Val 2)) (Var "x")
+      it "divides by the constant in the exponent" $
+        integrateH (E (Var "x")) "x" `shouldBe` Div (E (Var "x")) (Val 1.0)
+    describe "Ln" $ do
+      it "multiples by variable wrt if no variable" $
+        integrateH (Ln (Val 2)) "x" `shouldBe` Mult (Ln (Val 2)) (Var "x")

@@ -3,6 +3,7 @@ module Expressions
     eval,
     diffH,
     diff,
+    integrateH,
     integrate,
     integrateWithin,
   )
@@ -79,26 +80,21 @@ simplify x = x -- if none of the above, then return
 diff :: Expr -> Expr
 diff = simplify . simplify . diffH -- Simplify twice incase a simplify reveals previously uncaught simplifies (arbitrary)
 
-integrate' :: Expr -> String -> Expr
-integrate' (Add x y) wrt = Add (integrate' x wrt) (integrate' y wrt) -- Integrate down the tree
-integrate' (Sub x y) wrt = Sub (integrate' x wrt) (integrate' y wrt) -- Integrate down the tree
-integrate' (Mult x (Val a)) wrt = Mult (Val a) (integrate' x wrt) -- ignore constant
-integrate' (Mult (Val a) y) wrt = Mult (Val a) (integrate' y wrt) -- ignore constant, should there be an Integration by parts?
-integrate' (Div x (Val a)) wrt = Div (integrate' x wrt) (Val a) -- ignore constant
-integrate' (Div (Val a) y) wrt = Div (Val a) (integrate' (Div (Val 1) y) wrt) -- ignore constant
-integrate' (Pow z (Add x y)) wrt = Mult (integrate' (Pow z x) wrt) (integrate' (Pow z y) wrt) -- I(e^(x+y)) = I(e^x) * I(e^y)
-integrate' (Pow z (Sub x y)) wrt = Div (integrate' (Pow z x) wrt) (integrate' (Pow z y) wrt) -- I(e^(x-y)) = I(e^x) / I(e^y)
-integrate' (Pow (Var x) (Val a)) _ = Div (Pow (Var x) (Add (Val a) (Val 1))) (Add (Val a) (Val 1)) -- normal integration rule
-integrate' (Pow (Val a) (Var x)) _ = Div (Pow (Val a) (Var x)) (Ln (Val a)) -- 2^x -> 2^x / ln2
-integrate' (E (Val a)) wrt = Mult (E (Val a)) (Var wrt) -- e*2 -> x * e^2
-integrate' (E x) _ = Div (E x) (diffH x) -- e^f(x) -> e^f(x) / f'(x)
-integrate' (Var x) wrt = integrate' (Pow (Var x) (Val 1)) wrt -- x -> x^1 then integrate
-integrate' (Val a) wrt = Mult (Val a) (Var wrt) -- add variable we're integrated wrt
+integrateH :: Expr -> String -> Expr
+integrateH (Add x y) wrt = Add (integrateH x wrt) (integrateH y wrt) -- Integrate down the tree
+integrateH (Sub x y) wrt = Sub (integrateH x wrt) (integrateH y wrt) -- Integrate down the tree
+integrateH (Pow (Var x) (Val a)) _ = Div (Pow (Var x) (Add (Val a) (Val 1))) (Add (Val a) (Val 1)) -- normal integration rule
+integrateH (Pow (Val a) (Var x)) _ = Div (Pow (Val a) (Var x)) (Ln (Val a)) -- 2^x -> 2^x / ln2
+integrateH (E (Val a)) wrt = Mult (E (Val a)) (Var wrt) -- e*2 -> x * e^2
+integrateH (E x) _ = Div (E x) (diffH x) -- e^f(x) -> e^f(x) / f'(x)
+integrateH (Ln (Val a)) wrt = Mult (Ln (Val a)) (Var wrt) -- ln2 -> x * ln2
+integrateH (Var x) wrt = integrateH (Pow (Var x) (Val 1)) wrt -- x -> x^1 then integrate
+integrateH (Val a) wrt = Mult (Val a) (Var wrt) -- add variable we're integrated wrt
 
 integrate :: Expr -> String -> Expr
-integrate x wrt = Add (simplify . simplify $ integrate' x wrt) (Var "C")
+integrate x wrt = Add (simplify . simplify $ integrateH x wrt) (Var "C")
 
 integrateWithin :: Expr -> String -> Float -> Float -> Float
 integrateWithin x wrt a b = eval integrated [(wrt, b)] - eval integrated [(wrt, a)]
   where
-    integrated = simplify . simplify $ integrate' x wrt
+    integrated = simplify . simplify $ integrateH x wrt
