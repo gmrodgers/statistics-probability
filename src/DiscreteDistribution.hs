@@ -16,7 +16,7 @@ instance Show DiscreteDist where
   show (Uni a b) = "Uni " ++ show a ++ " " ++ show b
   show (Bin n p) = "Bin " ++ show n ++ " " ++ show p
   show (Pois la) = "Pois " ++ show la
-  show (Custom f domain) = "Custom f " ++ show domain
+  show (Custom _ domain) = "Custom f " ++ show domain
 
 uniformPMF a b _ = 1.0 / fromIntegral (b - a + 1)
 

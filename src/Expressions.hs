@@ -10,10 +10,11 @@ module Expressions
         Var,
         Val
       ),
-    eval,
     diff,
+    eval,
     integrate,
     integrateWithin,
+    simplify,
   )
 where
 
@@ -70,7 +71,7 @@ simplify (Mult _ (Val 0)) = Val 0 -- x * 0 = 0
 simplify (Mult (Pow x (Val a)) (Pow y (Val b))) = if x == y then Pow (simplify x) (Val (a + b)) else Mult (Pow (simplify x) (Val a)) (Pow (simplify y) (Val b)) -- x^1 * x^2 = x^3
 simplify (Mult x y) = Mult (simplify x) (simplify y) -- Simplify down the tree
 simplify (Div (Val a) (Val b)) = Val (a / b) -- 2 / 1 = 2
-simplify (Div (Val 0) y) = Val 0 -- 0 / x = 0
+simplify (Div (Val 0) _) = Val 0 -- 0 / x = 0
 simplify (Div x (Val 1)) = simplify x -- x / 1 = x
 simplify (Div (Pow x (Val a)) (Pow y (Val b))) = if x == y then Pow (simplify x) (Val (a - b)) else Div (Pow (simplify x) (Val a)) (Pow (simplify y) (Val b)) -- x^2 / x^1 = x^1
 simplify (Div x y) = Div (simplify x) (simplify y) -- Simplify down the tree

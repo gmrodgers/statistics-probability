@@ -38,11 +38,14 @@ library:
 
 tests:
   statistics-probability-test:
-    main:                Spec.hs
+    main:                ExpressionsSpec.hs
     source-dirs:         test
     ghc-options:
+    - -main-is ExpressionsSpec
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
     - statistics-probability
+    - hspec
+    - QuickCheck
