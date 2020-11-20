@@ -119,6 +119,7 @@ integrateSpec =
     describe "Val" $
       it "multiplies by variable wrt" $ do
         integrateH (Val 1) "x" `shouldBe` Mult (Val 1) (Var "x")
+        integrateH (Val (-1)) "x" `shouldBe` Mult (Val (-1)) (Var "x")
         integrateH (Val 2) "y" `shouldBe` Mult (Val 2) (Var "y")
     describe "Var" $
       it "increments the power and divides by the new power" $

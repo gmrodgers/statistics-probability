@@ -82,7 +82,9 @@ simplify (Ln x) = Ln (simplify x) -- Simplify down the tree
 simplify x = x -- if none of the above, then return
 
 simplifyTilStable :: Expr -> Expr
-simplifyTilStable = last . take 6 . iterate simplify
+simplifyTilStable x =
+  let (expr : exprs) = iterate simplify x
+   in (fst . head . dropWhile (uncurry (/=))) $ zip (expr : exprs) exprs
 
 diff :: Expr -> Expr
 diff = simplify . simplify . diffH -- Simplify twice incase a simplify reveals previously uncaught simplifies (arbitrary)
@@ -90,6 +92,8 @@ diff = simplify . simplify . diffH -- Simplify twice incase a simplify reveals p
 integrateH :: Expr -> String -> Expr
 integrateH (Add x y) wrt = Add (integrateH x wrt) (integrateH y wrt) -- Integrate down the tree
 integrateH (Sub x y) wrt = Sub (integrateH x wrt) (integrateH y wrt) -- Integrate down the tree
+integrateH (Mult (Val a) x) wrt = Mult (Val a) (integrateH x wrt)
+integrateH (Mult x (Val a)) wrt = Mult (integrateH x wrt) (Val a)
 integrateH (Pow (Var x) (Val a)) _ = Div (Pow (Var x) (Add (Val a) (Val 1))) (Add (Val a) (Val 1)) -- normal integration rule
 integrateH (Pow (Val a) (Var x)) _ = Div (Pow (Val a) (Var x)) (Ln (Val a)) -- 2^x -> 2^x / ln2
 integrateH (E (Val a)) wrt = Mult (E (Val a)) (Var wrt) -- e*2 -> x * e^2
