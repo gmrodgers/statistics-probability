@@ -48,8 +48,14 @@ evalSpec =
         eval (Var "x") [("x", 10)] `shouldBe` 10
       it "evaluates y" $
         eval (Var "y") [("x", 10), ("y", 11)] `shouldBe` 11
-      it "evaluates x and y" $
-        eval (Add (Var "x") (Var "y")) [("x", 10), ("y", 11)] `shouldBe` 21
+      it "evaluates recursively" $ do
+        eval (Add (Var "x") (Var "y")) [("x", 2), ("y", 3)] `shouldBe` 5
+        eval (Sub (Var "x") (Var "y")) [("x", 2), ("y", 3)] `shouldBe` (-1)
+        eval (Mult (Var "x") (Var "y")) [("x", 2), ("y", 3)] `shouldBe` 6
+        eval (Div (Var "x") (Var "y")) [("x", 3), ("y", 2)] `shouldBe` 1.5
+        eval (Pow (Var "x") (Var "y")) [("x", 3), ("y", 2)] `shouldBe` 9
+        eval (E (Var "x")) [("x", 3), ("y", 2)] `shouldBe` exp 3
+        eval (Ln (Var "x")) [("x", 3), ("y", 2)] `shouldBe` log 3
     describe "Val" $ do
       it "evaluates" $
         eval (Val 10) [] `shouldBe` 10
