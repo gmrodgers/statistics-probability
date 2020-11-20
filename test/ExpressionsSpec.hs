@@ -7,15 +7,18 @@ import Expressions
   ( Expr (Add, Div, E, Ln, Mult, Pow, Sub, Val, Var),
     diffH,
     eval,
+    integrate,
     integrateH,
   )
 import Test.Hspec (Spec, describe, hspec, it, parallel, shouldBe)
+import Test.QuickCheck
 
 main :: IO ()
 main = (hspec . parallel) $ do
   evalSpec
   diffSpec
   integrateSpec
+  integrateWithConstantSpec
 
 evalSpec :: Spec
 evalSpec =
@@ -136,3 +139,58 @@ integrateSpec =
     describe "Ln" $ do
       it "multiples by variable wrt if no variable" $
         integrateH (Ln (Val 2)) "x" `shouldBe` Mult (Ln (Val 2)) (Var "x")
+
+instance Arbitrary Expr where
+  arbitrary =
+    sized (arbitraryExpression 3)
+
+compoundExpr i = do
+  n <- choose (0, 10)
+  m <- choose (0, 10)
+  x <- arbitraryExpression i n
+  y <- arbitraryExpression i m
+  return (x, y)
+
+valOrVar = do
+  n <- choose (0, 1)
+  arbitraryExpression 3 n
+
+arbitraryExpression :: Int -> Int -> Gen Expr
+arbitraryExpression _ 0 = Val <$> arbitrary
+arbitraryExpression _ 1 = do return (Var "x")
+arbitraryExpression 0 _ = valOrVar
+arbitraryExpression i 2 = do
+  (x, y) <- compoundExpr (i -1)
+  return (Add x y)
+arbitraryExpression i 3 = do
+  (x, y) <- compoundExpr (i -1)
+  return (Sub x y)
+arbitraryExpression i 4 = do
+  (x, y) <- compoundExpr (i -1)
+  return (Mult x y)
+arbitraryExpression i 5 = do
+  (x, y) <- compoundExpr (i -1)
+  return (Div x y)
+arbitraryExpression i 6 = do
+  (x, y) <- compoundExpr (i -1)
+  return (Pow x y)
+arbitraryExpression i 7 = do
+  (x, _) <- compoundExpr (i -1)
+  return (E x)
+arbitraryExpression i 8 = do
+  (x, _) <- compoundExpr (i -1)
+  return (Ln x)
+arbitraryExpression i n = arbitraryExpression i (mod n 9)
+
+hasC :: Expr -> Bool
+hasC (Add _ (Var c)) = c == "C"
+hasC _ = False
+
+prop_hasC :: Expr -> Bool
+prop_hasC x = hasC $ integrate x "x"
+
+integrateWithConstantSpec :: Spec
+integrateWithConstantSpec =
+  describe "integrate" $
+    it "always adds constant 'C'" $
+      quickCheck prop_hasC
