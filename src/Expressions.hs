@@ -22,6 +22,30 @@ data Expr a
   | Val Float
   deriving (Eq, Show)
 
+-- works on leaves
+emap :: (Expr a -> Expr b) -> Expr a -> Expr b
+emap f (Add x y) = Add (f x) (f y)
+emap f (Sub x y) = Sub (f x) (f y)
+emap f (Mult x y) = Mult (f x) (f y)
+emap f (Div x y) = Div (f x) (f y)
+emap f (Pow x y) = Pow (f x) (f y)
+emap f (E x) = E (f x)
+emap f (Ln x) = Ln (f x)
+emap f (Var x) = f (Var x)
+emap f (Val a) = f (Val a)
+
+-- works on nodes
+apply :: (Expr String -> Expr String) -> Expr String -> Expr String
+apply _ (Val a) = Val a
+apply _ (Var l) = Var l
+apply f (Add x y) = f (Add (apply f x) (apply f y))
+apply f (Sub x y) = f (Sub (apply f x) (apply f y))
+apply f (Mult x y) = f (Mult (apply f x) (apply f y))
+apply f (Div x y) = f (Div (apply f x) (apply f y))
+apply f (Pow x y) = f (Pow (apply f x) (apply f y))
+apply f (E x) = f (E (apply f x))
+apply f (Ln x) = f (Ln (apply f x))
+
 eval :: Expr String -> [(String, Float)] -> Float
 eval (Add x y) vals = eval x vals + eval y vals
 eval (Sub x y) vals = eval x vals - eval y vals
@@ -47,17 +71,6 @@ diffH (Pow x (Val a)) = Mult (diffH x) (Mult (Val a) (Pow x (Sub (Val a) (Val 1)
 diffH (E x) = Mult (diffH x) (E x) -- e Exponent
 diffH (Ln x) = Mult (Div (Val 1) x) (diffH x)
 
-apply :: (Expr String -> Expr String) -> Expr String -> Expr String
-apply _ (Val a) = Val a
-apply _ (Var l) = Var l
-apply f (Add x y) = f (Add (apply f x) (apply f y))
-apply f (Sub x y) = f (Sub (apply f x) (apply f y))
-apply f (Mult x y) = f (Mult (apply f x) (apply f y))
-apply f (Div x y) = f (Div (apply f x) (apply f y))
-apply f (Pow x y) = f (Pow (apply f x) (apply f y))
-apply f (E x) = f (E (apply f x))
-apply f (Ln x) = f (Ln (apply f x))
-
 identity :: Expr String -> Expr String
 identity (Add x (Val 0)) = x
 identity (Add (Val 0) x) = x
@@ -65,7 +78,6 @@ identity (Sub x (Val 0)) = x
 identity (Mult x (Val 1)) = x
 identity (Mult (Val 1) x) = x
 identity (Div x (Val 1)) = x
-identity (Pow x (Val 1)) = x
 identity x = x
 
 zero :: Expr String -> Expr String
@@ -138,7 +150,7 @@ unnecessaryOne (Mult y (Div (Val 1) x)) = Div y x
 unnecessaryOne x = x
 
 simplify :: Expr String -> Expr String
-simplify = apply (powToVar . inverse . groupBases . unnecessaryOne . zeroOrder . zero . identity . varToPow)
+simplify = emap powToVar . apply (inverse . groupBases . unnecessaryOne . zeroOrder . zero . identity) . emap varToPow
 
 simplifyTilStable :: Expr String -> Expr String
 simplifyTilStable x =
