@@ -8,22 +8,22 @@ where
 
 import Expressions (Expr (..), eval, integrateWithin)
 
-data ContinuousDist = Exp Float | Unif Float Float | Norm Float Float | Custom Expr Float Float
+data ContinuousDist = Exp Float | Unif Float Float | Norm Float Float | Custom (Expr String) Float Float
 
-exponentialPDF :: Float -> Expr
+exponentialPDF :: Float -> Expr String
 exponentialPDF la = Mult (Val la) (E (Mult (Val (- la)) (Var "x")))
 
-uniformPDF :: Float -> Float -> Expr
+uniformPDF :: Float -> Float -> Expr String
 uniformPDF a b = Val (1 / (b - a))
 
-normalPDF :: Float -> Float -> Expr
+normalPDF :: Float -> Float -> Expr String
 normalPDF m v = Div numerator denominator
   where
     exponentVar = Pow (Div (Sub (Var "x") (Val m)) (Val (sqrt v))) (Val 2)
     numerator = E (Mult (Val (-0.5)) exponentVar)
     denominator = Val (sqrt v * sqrt (2 * pi))
 
-pdf :: ContinuousDist -> Expr
+pdf :: ContinuousDist -> Expr String
 pdf (Exp la) = exponentialPDF la
 pdf (Unif a b) = uniformPDF a b
 pdf (Norm m v) = normalPDF m v
@@ -38,7 +38,7 @@ numericalCDF dist a b splits = (b - a) * sum (map (\y -> eval (pdf dist) [("x", 
 cdf :: ContinuousDist -> Float -> Float -> Float
 cdf dist = integrateWithin (pdf dist) "x"
 
-expectedValue :: ContinuousDist -> (Expr -> Expr) -> Float -> Float -> Float
+expectedValue :: ContinuousDist -> (Expr String -> Expr String) -> Float -> Float -> Float
 expectedValue dist tr = integrateWithin ((tr . pdf) dist) "x"
 
 mean :: ContinuousDist -> Float

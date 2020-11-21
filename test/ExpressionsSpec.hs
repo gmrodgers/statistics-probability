@@ -146,10 +146,10 @@ integrateSpec =
       it "multiples by variable wrt if no variable" $
         integrateH (Ln (Val 2)) "x" `shouldBe` Mult (Ln (Val 2)) (Var "x")
 
-instance Arbitrary Expr where
-  arbitrary =
-    sized (arbitraryExpression 3)
+instance Arbitrary a => Arbitrary (Expr a) where
+  arbitrary = sized (arbitraryExpression 3)
 
+compoundExpr :: Arbitrary a => Int -> Gen (Expr a, Expr a)
 compoundExpr i = do
   n <- choose (0, 10)
   m <- choose (0, 10)
@@ -157,13 +157,14 @@ compoundExpr i = do
   y <- arbitraryExpression i m
   return (x, y)
 
+valOrVar :: Arbitrary a => Gen (Expr a)
 valOrVar = do
   n <- choose (0, 1)
   arbitraryExpression 3 n
 
-arbitraryExpression :: Int -> Int -> Gen Expr
+arbitraryExpression :: Arbitrary a => Int -> Int -> Gen (Expr a)
 arbitraryExpression _ 0 = Val <$> arbitrary
-arbitraryExpression _ 1 = do return (Var "x")
+arbitraryExpression _ 1 = Var <$> arbitrary
 arbitraryExpression 0 _ = valOrVar
 arbitraryExpression i 2 = do
   (x, y) <- compoundExpr (i -1)
@@ -188,12 +189,11 @@ arbitraryExpression i 8 = do
   return (Ln x)
 arbitraryExpression i n = arbitraryExpression i (mod n 9)
 
-hasC :: Expr -> Bool
-hasC (Add _ (Var c)) = c == "C"
-hasC _ = False
-
-prop_hasC :: Expr -> Bool
+prop_hasC :: Expr String -> Bool
 prop_hasC x = hasC $ integrate x "x"
+  where
+    hasC (Add _ (Var c)) = c == "C"
+    hasC _ = False
 
 integrateWithConstantSpec :: Spec
 integrateWithConstantSpec =

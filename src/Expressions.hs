@@ -10,19 +10,19 @@ module Expressions
   )
 where
 
-data Expr
-  = Add Expr Expr
-  | Sub Expr Expr
-  | Mult Expr Expr
-  | Div Expr Expr
-  | Pow Expr Expr
-  | E Expr
-  | Ln Expr
-  | Var String
+data Expr a
+  = Add (Expr a) (Expr a)
+  | Sub (Expr a) (Expr a)
+  | Mult (Expr a) (Expr a)
+  | Div (Expr a) (Expr a)
+  | Pow (Expr a) (Expr a)
+  | E (Expr a)
+  | Ln (Expr a)
+  | Var a
   | Val Float
   deriving (Eq, Show)
 
-eval :: Expr -> [(String, Float)] -> Float
+eval :: Expr String -> [(String, Float)] -> Float
 eval (Add x y) vals = eval x vals + eval y vals
 eval (Sub x y) vals = eval x vals - eval y vals
 eval (Mult x y) vals = eval x vals * eval y vals
@@ -36,7 +36,7 @@ eval (Var x) vals = lookup x vals
     lookup k = snd . head . filter ((== k) . fst)
 eval (Val a) _ = a
 
-diffH :: Expr -> Expr
+diffH :: Expr String -> Expr String
 diffH (Add x y) = Add (diffH x) (diffH y) -- Addition Rule
 diffH (Sub x y) = Sub (diffH x) (diffH y) -- Subtraction Rule
 diffH (Mult x y) = Add (Mult (diffH x) y) (Mult (diffH y) x) -- Product Rule
@@ -91,10 +91,10 @@ simplifyTilStable x =
   let (expr : exprs) = iterate simplify x
    in (fst . head . dropWhile (uncurry (/=))) $ zip (expr : exprs) exprs
 
-diff :: Expr -> Expr
+diff :: Expr String -> Expr String
 diff = simplifyTilStable . diffH -- Simplify twice incase a simplify reveals previously uncaught simplifies (arbitrary)
 
-integrateH :: Expr -> String -> Expr
+integrateH :: Expr String -> String -> Expr String
 integrateH (Add x y) wrt = Add (integrateH x wrt) (integrateH y wrt) -- Integrate down the tree
 integrateH (Sub x y) wrt = Sub (integrateH x wrt) (integrateH y wrt) -- Integrate down the tree
 integrateH (Mult (Val a) x) wrt = Mult (Val a) (integrateH x wrt)
@@ -107,10 +107,10 @@ integrateH (Ln (Val a)) wrt = Mult (Ln (Val a)) (Var wrt) -- ln2 -> x * ln2
 integrateH (Var x) wrt = integrateH (Pow (Var x) (Val 1)) wrt -- x -> x^1 then integrate
 integrateH (Val a) wrt = Mult (Val a) (Var wrt) -- add variable we're integrated wrt
 
-integrate :: Expr -> String -> Expr
+integrate :: Expr String -> String -> Expr String
 integrate x wrt = Add (simplifyTilStable $ integrateH x wrt) (Var "C")
 
-integrateWithin :: Expr -> String -> Float -> Float -> Float
+integrateWithin :: Expr String -> String -> Float -> Float -> Float
 integrateWithin x wrt a b = eval integrated [(wrt, b)] - eval integrated [(wrt, a)]
   where
     integrated = simplify . simplify $ integrateH x wrt
