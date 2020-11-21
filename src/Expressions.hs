@@ -47,46 +47,100 @@ diffH (Pow x (Val a)) = Mult (diffH x) (Mult (Val a) (Pow x (Sub (Val a) (Val 1)
 diffH (E x) = Mult (diffH x) (E x) -- e Exponent
 diffH (Ln x) = Mult (Div (Val 1) x) (diffH x)
 
-simplify :: Expr -> Expr
-simplify (Add (Val a) (Val b)) = Val (a + b) -- 1 + 1 = 2
-simplify (Add x (Val 0)) = simplify x -- x + 0 = x
-simplify (Add (Val 0) y) = simplify y -- 0 + y = y
-simplify (Add x y) = Add (simplify x) (simplify y) -- Simplify down the tree
-simplify (Sub (Val a) (Val b)) = Val (a - b) -- 2 - 1 = 0
-simplify (Sub x (Val 0)) = simplify x -- x - 0 = x
-simplify (Sub x y) = Sub (simplify x) (simplify y) -- Simplify down the tree
-simplify (Mult (Val a) (Val b)) = Val (a * b) -- 1 * 2 = 2
-simplify (Mult (Val 1) y) = simplify y -- 1 * y = y
-simplify (Mult x (Val 1)) = simplify x -- x * 1 = x
-simplify (Mult (Val 0) _) = Val 0 -- 0 * x = 0
-simplify (Mult _ (Val 0)) = Val 0 -- x * 0 = 0
-simplify (Mult (Pow x (Val a)) (Pow y (Val b)))
-  | x == y = Pow (simplify x) (Val (a + b)) -- x^1 * x^2 = x^3
-  | otherwise = Mult (Pow (simplify x) (Val a)) (Pow (simplify y) (Val b))
-simplify (Mult x (Pow y (Val a)))
-  | x == y = Pow (simplify x) (Val (a + 1))
-  | otherwise = Mult (simplify x) (simplify (Pow y (Val a)))
-simplify (Mult (Div (Val 1) x) y) = Div (simplify y) (simplify x)
-simplify (Mult y (Div (Val 1) x)) = Div (simplify y) (simplify x)
-simplify (Mult x y) = Mult (simplify x) (simplify y) -- Simplify down the tree
-simplify (Div (Val a) (Val b)) = Val (a / b) -- 2 / 1 = 2
-simplify (Div (Val 0) _) = Val 0 -- 0 / x = 0
-simplify (Div x (Val 1)) = simplify x -- x / 1 = x
-simplify (Div (Pow x (Val a)) (Pow y (Val b)))
-  | x == y = Pow (simplify x) (Val (a - b)) -- x^2 / x^1 = x^1
-  | otherwise = Div (Pow (simplify x) (Val a)) (Pow (simplify y) (Val b))
-simplify (Div x y) = if x == y then Val 1 else Div (simplify x) (simplify y)
-simplify (Pow x (Val 1)) = simplify x -- x^1 = x
-simplify (Pow _ (Val 0)) = Val 1 -- x^0 = 1
-simplify (Pow x y) = Pow (simplify x) (simplify y) -- Simplify down the tree
-simplify (E (Ln (Val 1))) = Val 1 -- e^lnx = 1
-simplify (E x) = E (simplify x) -- Simplify down the tree
-simplify (Ln (Val 1)) = Val 0 -- ln1 = 0
-simplify (Ln (E (Val 1))) = Val 1 -- ln(e*x) = 1
-simplify (Ln x) = Ln (simplify x) -- Simplify down the tree
-simplify x = x -- if none of the above, then return
+apply :: (Expr String -> Expr String) -> Expr String -> Expr String
+apply _ (Val a) = Val a
+apply _ (Var l) = Var l
+apply f (Add x y) = f (Add (apply f x) (apply f y))
+apply f (Sub x y) = f (Sub (apply f x) (apply f y))
+apply f (Mult x y) = f (Mult (apply f x) (apply f y))
+apply f (Div x y) = f (Div (apply f x) (apply f y))
+apply f (Pow x y) = f (Pow (apply f x) (apply f y))
+apply f (E x) = f (E (apply f x))
+apply f (Ln x) = f (Ln (apply f x))
 
-simplifyTilStable :: Expr -> Expr
+identity :: Expr String -> Expr String
+identity (Add x (Val 0)) = x
+identity (Add (Val 0) x) = x
+identity (Sub x (Val 0)) = x
+identity (Mult x (Val 1)) = x
+identity (Mult (Val 1) x) = x
+identity (Div x (Val 1)) = x
+identity (Pow x (Val 1)) = x
+identity x = x
+
+zero :: Expr String -> Expr String
+zero orig@(Add (Val a) (Val b))
+  | a == (- b) = Val 0
+  | otherwise = orig --- Should we replace -1.0 with Negate 1.0 so we dont have to use vals??
+zero (Sub x y) = if x == y then Val 0 else Sub x y
+zero (Mult _ (Val 0)) = Val 0
+zero (Mult (Val 0) _) = Val 0
+zero (Div (Val 0) x) = x
+zero (Ln (Val 1)) = Val 0
+zero x = x
+
+zeroOrder :: Expr String -> Expr String
+zeroOrder (Add (Val a) (Val b)) = Val (a + b)
+zeroOrder (Sub (Val a) (Val b)) = Val (a - b)
+zeroOrder (Mult (Val a) (Val b)) = Val (a * b)
+zeroOrder (Div (Val a) (Val b)) = Val (a / b)
+zeroOrder (Pow _ (Val 0)) = Val 1
+zeroOrder x = x
+
+inverse :: Expr String -> Expr String
+inverse (Add (Sub x y) z) = if y == z then x else Add (Sub x y) z
+inverse (Add z (Sub x y)) = if y == z then x else Add z (Sub x y)
+inverse (Sub (Add x y) z)
+  | x == z = y
+  | y == z = x
+  | otherwise = Sub (Add x y) z
+inverse orig@(Sub (Val a) (Add (Val b) (Val c))) -- same negate issue as above so only vals here
+  | (- b) == a = Val (- c)
+  | (- c) == a = Val (- b)
+  | otherwise = orig
+inverse (Mult (Div x y) z) = if y == z then x else Mult (Div x y) z
+inverse (Mult z (Div x y)) = if y == z then x else Mult z (Div x y)
+inverse (Div (Mult x y) z)
+  | x == z = y
+  | y == z = x
+  | otherwise = Div (Mult x y) z
+inverse orig@(Div (Val a) (Mult (Val b) (Val c))) -- same negate issue as above so only vals here
+  | (- b) == a = Val (- c)
+  | (- c) == a = Val (- b)
+  | otherwise = orig
+inverse (Div x y)
+  | x == y = Val 1
+  | otherwise = Div x y
+inverse (E (Ln x)) = x
+inverse (Ln (E x)) = x
+inverse x = x
+
+groupBases :: Expr String -> Expr String
+groupBases orig@(Mult (Pow x (Val a)) (Pow y (Val b)))
+  | x == y = Pow x (Val (a + b))
+  | otherwise = orig
+groupBases orig@(Div (Pow x (Val a)) (Pow y (Val b)))
+  | x == y = Pow x (Val (a - b))
+  | otherwise = orig
+groupBases x = x
+
+varToPow :: Expr String -> Expr String
+varToPow (Var x) = Pow (Var x) (Val 1)
+varToPow x = x
+
+powToVar :: Expr String -> Expr String
+powToVar (Pow (Var x) (Val 1)) = Var x
+powToVar x = x
+
+unnecessaryOne :: Expr String -> Expr String
+unnecessaryOne (Mult (Div (Val 1) x) y) = Div y x
+unnecessaryOne (Mult y (Div (Val 1) x)) = Div y x
+unnecessaryOne x = x
+
+simplify :: Expr String -> Expr String
+simplify = apply (powToVar . inverse . groupBases . unnecessaryOne . zeroOrder . zero . identity . varToPow)
+
+simplifyTilStable :: Expr String -> Expr String
 simplifyTilStable x =
   let (expr : exprs) = iterate simplify x
    in (fst . head . dropWhile (uncurry (/=))) $ zip (expr : exprs) exprs
