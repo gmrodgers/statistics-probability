@@ -5,11 +5,11 @@ where
 
 import Expressions
   ( Expr (Add, Div, E, Ln, Mult, Pow, Sub, Val, Var),
-    diffH,
+    diff,
     eval,
     integrate,
     integrateH,
-    simplifyTilStable,
+    simplify,
   )
 import Test.Hspec (Spec, describe, hspec, it, parallel, shouldBe)
 import Test.QuickCheck
@@ -74,44 +74,43 @@ evalSpec =
 
 diffSpec :: Spec
 diffSpec =
-  let diffS = simplifyTilStable . diffH
-   in describe "diff" $ do
-        describe "Val" $
-          it "goes to 0" $
-            diffS (Val 1) `shouldBe` Val 0
-        describe "Var" $
-          it "removes the variable 'x'" $ do
-            diffS (Var "x") `shouldBe` Val 1
-        describe "Pow" $
-          it "follows the power rule: d/dx x^a = a . x^(a-1)" $ do
-            diffS (Pow (Var "x") (Val 2)) `shouldBe` Mult (Val 2) (Var "x")
-        describe "Add" $
-          it "differentiates each operand" $
-            diffS (Add (Var "x") (Var "x")) `shouldBe` Val 2
-        describe "Sub" $
-          it "differentiates each operand" $
-            diffS (Sub (Var "x") (Var "x")) `shouldBe` Val 0
-        describe "Mult" $
-          it "follows the product rule: d/dx f(x)h(x) = f'(x)h(x) + f(x)h'(x)" $ do
-            diffS (Mult (Val 2) (Var "x")) `shouldBe` Val 2
-            diffS (Mult (Var "x") (Ln (Var "x"))) `shouldBe` Add (Ln (Var "x")) (Val 1)
-        describe "Div" $
-          it "follows the quotient rule: d/dx f(x)/h(x) = [h(x)f'(x) - f(x)h'(x)] / h(x)^2" $
-            let numerator = Sub (Ln (Var "x")) (Val 1)
-                denominator = Pow (Ln (Var "x")) (Val 2)
-             in diffS (Div (Var "x") (Ln (Var "x"))) `shouldBe` Div numerator denominator
-        describe "E" $
-          it "multiples E by the differential of the exponent" $ do
-            diffS (E (Val 2)) `shouldBe` Val 0
-            diffS (E (Var "x")) `shouldBe` E (Var "x")
-            diffS (E (Mult (Val 2) (Var "x"))) `shouldBe` Mult (Val 2) (E (Mult (Val 2) (Var "x")))
-            diffS (E (Pow (Var "x") (Val 2))) `shouldBe` Mult (Mult (Val 2) (Var "x")) (E (Pow (Var "x") (Val 2)))
-        describe "Ln" $
-          it "divides the differential of the operand by the operand" $ do
-            diffS (Ln (Var "x")) `shouldBe` Div (Val 1) (Var "x")
-        describe "Chain Rule" $
-          it "applies chain rule: d/dx f(g(x)) = f'(g(x)) * g'(x)" $
-            diffS (Ln (Pow (Var "x") (Val 2))) `shouldBe` Div (Mult (Val 2) (Var "x")) (Pow (Var "x") (Val 2))
+  describe "diff" $ do
+    describe "Val" $
+      it "goes to 0" $
+        diff (Val 1) `shouldBe` Val 0
+    describe "Var" $
+      it "removes the variable 'x'" $ do
+        diff (Var "x") `shouldBe` Val 1
+    describe "Pow" $
+      it "follows the power rule: d/dx x^a = a . x^(a-1)" $ do
+        diff (Pow (Var "x") (Val 2)) `shouldBe` Mult (Val 2) (Var "x")
+    describe "Add" $
+      it "differentiates each operand" $
+        diff (Add (Var "x") (Var "x")) `shouldBe` Val 2
+    describe "Sub" $
+      it "differentiates each operand" $
+        diff (Sub (Var "x") (Var "x")) `shouldBe` Val 0
+    describe "Mult" $
+      it "follows the product rule: d/dx f(x)h(x) = f'(x)h(x) + f(x)h'(x)" $ do
+        diff (Mult (Val 2) (Var "x")) `shouldBe` Val 2
+        diff (Mult (Var "x") (Ln (Var "x"))) `shouldBe` Add (Ln (Var "x")) (Val 1)
+    describe "Div" $
+      it "follows the quotient rule: d/dx f(x)/h(x) = [h(x)f'(x) - f(x)h'(x)] / h(x)^2" $
+        let numerator = Sub (Ln (Var "x")) (Val 1)
+            denominator = Pow (Ln (Var "x")) (Val 2)
+         in diff (Div (Var "x") (Ln (Var "x"))) `shouldBe` Div numerator denominator
+    describe "E" $
+      it "multiples E by the differential of the exponent" $ do
+        diff (E (Val 2)) `shouldBe` Val 0
+        diff (E (Var "x")) `shouldBe` E (Var "x")
+        diff (E (Mult (Val 2) (Var "x"))) `shouldBe` Mult (Val 2) (E (Mult (Val 2) (Var "x")))
+        diff (E (Pow (Var "x") (Val 2))) `shouldBe` Mult (Mult (Val 2) (Var "x")) (E (Pow (Var "x") (Val 2)))
+    describe "Ln" $
+      it "divides the differential of the operand by the operand" $ do
+        diff (Ln (Var "x")) `shouldBe` Div (Val 1) (Var "x")
+    describe "Chain Rule" $
+      it "applies chain rule: d/dx f(g(x)) = f'(g(x)) * g'(x)" $
+        diff (Ln (Pow (Var "x") (Val 2))) `shouldBe` Div (Mult (Val 2) (Var "x")) (Pow (Var "x") (Val 2))
 
 integrateSpec :: Spec
 integrateSpec =

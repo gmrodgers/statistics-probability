@@ -6,7 +6,7 @@ module Expressions
     integrateH,
     integrate,
     integrateWithin,
-    simplifyTilStable,
+    simplify,
   )
 where
 
@@ -46,19 +46,25 @@ apply f (Pow x y) = f (Pow (apply f x) (apply f y))
 apply f (E x) = f (E (apply f x))
 apply f (Ln x) = f (Ln (apply f x))
 
-eval :: Expr String -> [(String, Float)] -> Float
-eval (Add x y) vals = eval x vals + eval y vals
-eval (Sub x y) vals = eval x vals - eval y vals
-eval (Mult x y) vals = eval x vals * eval y vals
-eval (Div x y) vals = eval x vals / eval y vals
-eval (Pow x y) vals = eval x vals ** eval y vals
-eval (E x) vals = exp (eval x vals)
-eval (Ln x) vals = log (eval x vals)
-eval (Var x) vals = lookup x vals
+performArithmetic :: Expr String -> Float
+performArithmetic (Add x y) = performArithmetic x + performArithmetic y
+performArithmetic (Sub x y) = performArithmetic x - performArithmetic y
+performArithmetic (Mult x y) = performArithmetic x * performArithmetic y
+performArithmetic (Div x y) = performArithmetic x / performArithmetic y
+performArithmetic (Pow x y) = performArithmetic x ** performArithmetic y
+performArithmetic (E x) = exp (performArithmetic x)
+performArithmetic (Ln x) = log (performArithmetic x)
+performArithmetic (Val a) = a
+performArithmetic (Var _) = error "should not be performed on Expr with Vars"
+
+substitute :: (String, Float) -> Expr String -> Expr String
+substitute = emap . varSub
   where
-    lookup :: String -> [(String, Float)] -> Float
-    lookup k = snd . head . filter ((== k) . fst)
-eval (Val a) _ = a
+    varSub (k, v) (Var l) = if l == k then Val v else Var l
+    varSub _ (Val a) = Val a
+
+eval :: Expr String -> [(String, Float)] -> Float
+eval x varSubs = performArithmetic $ foldl (flip substitute) x varSubs
 
 diffH :: Expr String -> Expr String
 diffH (Add x y) = Add (diffH x) (diffH y) -- Addition Rule
@@ -152,13 +158,8 @@ unnecessaryOne x = x
 simplify :: Expr String -> Expr String
 simplify = apply (powToVar . inverse . groupBases . unnecessaryOne . zeroOrder . zero . identity) . emap varToPow
 
-simplifyTilStable :: Expr String -> Expr String
-simplifyTilStable x =
-  let (expr : exprs) = iterate simplify x
-   in (fst . head . dropWhile (uncurry (/=))) $ zip (expr : exprs) exprs
-
 diff :: Expr String -> Expr String
-diff = simplifyTilStable . diffH -- Simplify twice incase a simplify reveals previously uncaught simplifies (arbitrary)
+diff = simplify . diffH
 
 integrateH :: Expr String -> String -> Expr String
 integrateH (Add x y) wrt = Add (integrateH x wrt) (integrateH y wrt) -- Integrate down the tree
@@ -174,9 +175,9 @@ integrateH (Var x) wrt = integrateH (Pow (Var x) (Val 1)) wrt -- x -> x^1 then i
 integrateH (Val a) wrt = Mult (Val a) (Var wrt) -- add variable we're integrated wrt
 
 integrate :: Expr String -> String -> Expr String
-integrate x wrt = Add (simplifyTilStable $ integrateH x wrt) (Var "C")
+integrate x wrt = Add (simplify $ integrateH x wrt) (Var "C")
 
 integrateWithin :: Expr String -> String -> Float -> Float -> Float
-integrateWithin x wrt a b = eval integrated [(wrt, b)] - eval integrated [(wrt, a)]
+integrateWithin x wrt a b = (sum . map integrateAt) [a, - b]
   where
-    integrated = simplify . simplify $ integrateH x wrt
+    integrateAt = \c -> eval ((simplify . integrateH x) wrt) [(wrt, c)]
