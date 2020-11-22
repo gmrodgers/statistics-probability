@@ -150,7 +150,7 @@ unnecessaryOne (Mult y (Div (Val 1) x)) = Div y x
 unnecessaryOne x = x
 
 simplify :: Expr String -> Expr String
-simplify = emap powToVar . apply (inverse . groupBases . unnecessaryOne . zeroOrder . zero . identity) . emap varToPow
+simplify = apply (powToVar . inverse . groupBases . unnecessaryOne . zeroOrder . zero . identity) . emap varToPow
 
 simplifyTilStable :: Expr String -> Expr String
 simplifyTilStable x =
