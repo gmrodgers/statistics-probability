@@ -1,25 +1,19 @@
 module ExpressionsSpec
-  ( main,
+  ( mainSpec,
   )
 where
 
-import Expressions
-  ( Expr (Add, Div, E, Ln, Mult, Pow, Sub, Val, Var),
-    diff,
-    eval,
-    integrate,
-    integrateH,
-    simplify,
-  )
-import Test.Hspec (Spec, describe, hspec, it, parallel, shouldBe)
+import Expressions (Expr (..), diff, eval, integrateH)
+import Test.Hspec (Spec, describe, it, parallel, shouldBe)
 import Test.QuickCheck
 
-main :: IO ()
-main = (hspec . parallel) $ do
-  evalSpec
-  diffSpec
-  integrateSpec
-  integrateWithConstantSpec
+mainSpec :: Spec
+mainSpec =
+  parallel $
+    describe "expressions" $ do
+      evalSpec
+      diffSpec
+      integrateSpec
 
 evalSpec :: Spec
 evalSpec =
@@ -187,15 +181,3 @@ arbitraryExpression i 8 = do
   (x, _) <- compoundExpr (i -1)
   return (Ln x)
 arbitraryExpression i n = arbitraryExpression i (mod n 9)
-
-prop_hasC :: Expr String -> Bool
-prop_hasC x = hasC $ integrate x "x"
-  where
-    hasC (Add _ (Var c)) = c == "C"
-    hasC _ = False
-
-integrateWithConstantSpec :: Spec
-integrateWithConstantSpec =
-  describe "integrate" $
-    it "always adds constant 'C'" $
-      quickCheck prop_hasC

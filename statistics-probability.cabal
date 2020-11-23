@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 1f26d974b2cf3b151abca8063b8e9eb459db6e19b24d42a5dc3b7e72e176332e
+-- hash: 797e9b7d9893d65a24dc47ab21dcb7ca7644ff59b15542fe07d22f1e71a28b5b
 
 name:           statistics-probability
 version:        0.1.0.0
@@ -40,12 +40,14 @@ library
 
 test-suite statistics-probability-test
   type: exitcode-stdio-1.0
-  main-is: ExpressionsSpec.hs
+  main-is: SuiteSpec.hs
   other-modules:
+      ContinuousDistributionSpec
+      ExpressionsSpec
       Paths_statistics_probability
   hs-source-dirs:
       test
-  ghc-options: -main-is ExpressionsSpec -threaded -rtsopts -with-rtsopts=-N
+  ghc-options: -main-is SuiteSpec -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       QuickCheck
     , base >=4.7 && <5

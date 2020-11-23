@@ -3,6 +3,8 @@ module ContinuousDistribution
     pdf,
     mean,
     variance,
+    numericalCDF,
+    cdf,
   )
 where
 
