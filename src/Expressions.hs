@@ -24,13 +24,13 @@ data Expr a
 
 -- works on leaves
 emap :: (Expr a -> Expr b) -> Expr a -> Expr b
-emap f (Add x y) = Add (f x) (f y)
-emap f (Sub x y) = Sub (f x) (f y)
-emap f (Mult x y) = Mult (f x) (f y)
-emap f (Div x y) = Div (f x) (f y)
-emap f (Pow x y) = Pow (f x) (f y)
-emap f (E x) = E (f x)
-emap f (Ln x) = Ln (f x)
+emap f (Add x y) = Add (emap f x) (emap f y)
+emap f (Sub x y) = Sub (emap f x) (emap f y)
+emap f (Mult x y) = Mult (emap f x) (emap f y)
+emap f (Div x y) = Div (emap f x) (emap f y)
+emap f (Pow x y) = Pow (emap f x) (emap f y)
+emap f (E x) = E (emap f x)
+emap f (Ln x) = Ln (emap f x)
 emap f (Var x) = f (Var x)
 emap f (Val a) = f (Val a)
 
@@ -61,7 +61,7 @@ substitute :: (String, Float) -> Expr String -> Expr String
 substitute = emap . varSub
   where
     varSub (k, v) (Var l) = if l == k then Val v else Var l
-    varSub _ (Val a) = Val a
+    varSub _ x = x
 
 eval :: Expr String -> [(String, Float)] -> Float
 eval x varSubs = performArithmetic $ foldl (flip substitute) x varSubs
@@ -178,6 +178,4 @@ integrate :: Expr String -> String -> Expr String
 integrate x wrt = Add (simplify $ integrateH x wrt) (Var "C")
 
 integrateWithin :: Expr String -> String -> Float -> Float -> Float
-integrateWithin x wrt a b = (sum . map integrateAt) [a, - b]
-  where
-    integrateAt = \c -> eval ((simplify . integrateH x) wrt) [(wrt, c)]
+integrateWithin x wrt a b = eval ((simplify . integrateH x) wrt) [(wrt, b)] - eval ((simplify . integrateH x) wrt) [(wrt, a)]
