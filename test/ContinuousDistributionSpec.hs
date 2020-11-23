@@ -20,11 +20,18 @@ prop_integratesToOneOverFullDomain err n =
   let res = cdf (Exp n) 0 128
    in res < 1.0 + err && res > 1.0 - err
 
+prop_integratesToOneOverFullDomainViaNumericalMethod :: Float -> Float -> Bool
+prop_integratesToOneOverFullDomainViaNumericalMethod err n =
+  let res = numericalCDF (Exp n) 0 128 100
+   in res < 1.0 + err && res > 1.0 - err
+
 expSpec :: Spec
 expSpec =
   let err = 0.01
    in describe "exp cdf" $ do
         it "integrates to 1 as x -> infinity" $
           quickCheck $ forAll genPos (prop_integratesToOneOverFullDomain err)
+        it "integrates to 1 as x -> infinity via numerical method" $
+          quickCheck $ forAll genPos (prop_integratesToOneOverFullDomainViaNumericalMethod err)
         it "integrates to correct probability " $
-          abs (cdf (Exp 1) 0 1) - 0.63212 < err `shouldBe` True
+          abs (cdf (Exp 1) 0 1 - 0.63212) < err `shouldBe` True
