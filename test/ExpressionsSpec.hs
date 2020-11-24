@@ -3,8 +3,9 @@ module ExpressionsSpec
   )
 where
 
-import Expressions (Expr (..), diff, eval, integrateH)
-import Test.Hspec (Spec, describe, it, parallel, shouldBe)
+import Debug.Trace
+import Expressions
+import Test.Hspec
 import Test.QuickCheck
 
 mainSpec :: Spec
@@ -14,6 +15,9 @@ mainSpec =
       evalSpec
       diffSpec
       integrateSpec
+      identitySpec
+      zeroSpec
+      constantsSpec
 
 evalSpec :: Spec
 evalSpec =
@@ -139,45 +143,84 @@ integrateSpec =
       it "multiples by variable wrt if no variable" $
         integrateH (Ln (Val 2)) "x" `shouldBe` Mult (Ln (Val 2)) (Var "x")
 
-instance Arbitrary a => Arbitrary (Expr a) where
-  arbitrary = sized (arbitraryExpression 3)
+identitySpec :: Spec
+identitySpec =
+  describe "identity" $
+    it "recognises identity parameter for expr" $
+      let isExprOrOperand expr x y = identity expr == x || identity expr == y || identity expr == expr
 
-compoundExpr :: Arbitrary a => Int -> Gen (Expr a, Expr a)
-compoundExpr i = do
-  n <- choose (0, 10)
-  m <- choose (0, 10)
-  x <- arbitraryExpression i n
-  y <- arbitraryExpression i m
-  return (x, y)
+          prop_returnsSame expr@(Add x y) = isExprOrOperand expr x y
+          prop_returnsSame expr@(Sub x y) = isExprOrOperand expr x y
+          prop_returnsSame expr@(Mult x y) = isExprOrOperand expr x y
+          prop_returnsSame expr@(Div x y) = isExprOrOperand expr x y
+          prop_returnsSame expr = identity expr == expr
+       in verboseCheck $ forAll expressions prop_returnsSame
 
-valOrVar :: Arbitrary a => Gen (Expr a)
-valOrVar = do
-  n <- choose (0, 1)
-  arbitraryExpression 3 n
+zeroSpec :: Spec
+zeroSpec =
+  describe "zero" $
+    it "recognises zeroer parameter for expr" $
+      let prop_returnsZero expr = zero expr == expr || zero expr == Val 0
+       in verboseCheck $ forAll expressions prop_returnsZero
 
-arbitraryExpression :: Arbitrary a => Int -> Int -> Gen (Expr a)
-arbitraryExpression _ 0 = Val <$> arbitrary
-arbitraryExpression _ 1 = Var <$> arbitrary
-arbitraryExpression 0 _ = valOrVar
-arbitraryExpression i 2 = do
-  (x, y) <- compoundExpr (i -1)
-  return (Add x y)
-arbitraryExpression i 3 = do
-  (x, y) <- compoundExpr (i -1)
-  return (Sub x y)
-arbitraryExpression i 4 = do
-  (x, y) <- compoundExpr (i -1)
-  return (Mult x y)
-arbitraryExpression i 5 = do
-  (x, y) <- compoundExpr (i -1)
-  return (Div x y)
-arbitraryExpression i 6 = do
-  (x, y) <- compoundExpr (i -1)
-  return (Pow x y)
-arbitraryExpression i 7 = do
-  (x, _) <- compoundExpr (i -1)
-  return (E x)
-arbitraryExpression i 8 = do
-  (x, _) <- compoundExpr (i -1)
-  return (Ln x)
-arbitraryExpression i n = arbitraryExpression i (mod n 9)
+constantsSpec :: Spec
+constantsSpec =
+  describe "constants" $
+    it "recognises constants to pair up" $
+      let isExprOrFunctionOf expr x y f = constants expr == expr || constants expr == Val (f x y) || constants expr == Val 1.0
+
+          prop_returnsFunctionOF expr@(Add (Val x) (Val y)) = isExprOrFunctionOf expr x y (+)
+          prop_returnsFunctionOF expr@(Sub (Val x) (Val y)) = isExprOrFunctionOf expr x y (-)
+          prop_returnsFunctionOF expr@(Mult (Val x) (Val y)) = isExprOrFunctionOf expr x y (*)
+          prop_returnsFunctionOF expr@(Div (Val x) (Val y)) = isExprOrFunctionOf expr x y (/)
+          prop_returnsFunctionOF expr@(Pow _ (Val y)) = isExprOrFunctionOf expr y y (**)
+          prop_returnsFunctionOF expr = constants expr == expr
+       in verboseCheck $ forAll expressions prop_returnsFunctionOF
+
+inverseSpec :: Spec
+inverseSpec =
+  describe "inverse" $ do
+    it "recognises inverses to cancel" $
+      let isExprOrInverse expr x y = inverse expr == x || inverse expr == y
+          arbitraryInversePairs =
+            let x = Val <$> arbitrary
+                y = Var <$> arbitrary
+                f1 x a = x <$> a
+                f2 x a b = x <$> a <*> b
+             in [ f2 Add x (f2 Sub y x),
+                  f2 Add (f2 Sub y x) x,
+                  f2 Sub (f2 Add y x) x,
+                  f2 Mult (f2 Div y x) x,
+                  f2 Mult x (f2 Div y x),
+                  f2 Div (f2 Mult y x) x,
+                  f1 Ln (f1 E x),
+                  f1 E (f1 Ln x)
+                ]
+
+          prop_returnsInverseCancelledOut expr@(Add x y) = isExprOrInverse expr x y
+          prop_returnsInverseCancelledOut expr@(Sub x y) = isExprOrInverse expr x y
+          prop_returnsInverseCancelledOut expr@(Mult x y) = isExprOrInverse expr x y
+          prop_returnsInverseCancelledOut expr@(Div x y) = isExprOrInverse expr x y
+          prop_returnsInverseCancelledOut expr@(E x) = isExprOrInverse expr x x
+          prop_returnsInverseCancelledOut expr@(Ln x) = isExprOrInverse expr x x
+       in verboseCheck $ forAll (oneof arbitraryInversePairs) prop_returnsInverseCancelledOut
+    it "is complete" $
+      verboseCheck $ forAll expressions (const True)
+
+expressions :: Gen (Expr String)
+expressions =
+  oneof
+    [ Add <$> valExpressions <*> valExpressions,
+      Sub <$> valExpressions <*> valExpressions,
+      Mult <$> valExpressions <*> valExpressions,
+      Div <$> valExpressions <*> nonZeroValExpression,
+      Pow <$> valExpressions <*> valExpressions,
+      E <$> valExpressions,
+      Ln <$> valExpressions
+    ]
+
+valExpressions :: Gen (Expr a)
+valExpressions = oneof [return (Val 0), return (Val 1), Val <$> arbitrary]
+
+nonZeroValExpression :: Gen (Expr a)
+nonZeroValExpression = oneof [return (Val 1), Val <$> arbitrary `suchThat` (> 0)]

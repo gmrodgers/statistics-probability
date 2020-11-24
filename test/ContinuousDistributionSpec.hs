@@ -28,10 +28,21 @@ prop_integratesToOneOverFullDomainViaNumericalMethod err n =
 expSpec :: Spec
 expSpec =
   let err = 0.01
-   in describe "exp cdf" $ do
-        it "integrates to 1 as x -> infinity" $
-          quickCheck $ forAll genPos (prop_integratesToOneOverFullDomain err)
-        it "integrates to 1 as x -> infinity via numerical method" $
-          quickCheck $ forAll genPos (prop_integratesToOneOverFullDomainViaNumericalMethod err)
-        it "integrates to correct probability " $
-          abs (cdf (Exp 1) 0 1 - 0.63212) < err `shouldBe` True
+      withinErrorOf answer x = (&&) (x < (answer + err)) (x > (answer - err))
+   in describe "exp" $ do
+        describe "cdf" $ do
+          it "integrates to 1 as x -> infinity" $
+            quickCheck $ forAll genPos (prop_integratesToOneOverFullDomain err)
+          it "integrates to correct probability " $
+            cdf (Exp 1) 0 1 `shouldSatisfy` withinErrorOf 0.63212
+        describe "numerical cdf" $ do
+          it "integrates to 1 as x -> infinity" $
+            quickCheck $ forAll genPos (prop_integratesToOneOverFullDomainViaNumericalMethod err)
+          it "integrates to correct probability " $
+            numericalCDF (Exp 1) 0 1 1000 `shouldSatisfy` withinErrorOf 0.63212
+
+        xdescribe "statistics" $ do
+          it "has correct mean" $
+            let equivalent = Custom (exponentialPDF 1.0) 0 128
+                exponential = Exp 1.0
+             in mean equivalent `shouldBe` mean exponential

@@ -4,6 +4,9 @@ module ContinuousDistribution
     mean,
     variance,
     numericalCDF,
+    exponentialPDF,
+    uniformPDF,
+    normalPDF,
     cdf,
   )
 where
