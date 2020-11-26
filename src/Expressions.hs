@@ -15,6 +15,7 @@ module Expressions
     constants,
     zero,
     identity,
+    varToPow,
   )
 where
 
@@ -110,8 +111,9 @@ constants (Add (Val a) (Val b)) = Val (a + b)
 constants (Sub (Val a) (Val b)) = Val (a - b)
 constants (Mult (Val a) (Val b)) = Val (a * b)
 constants (Div (Val a) (Val b)) = Val (a / b)
-constants (Pow _ (Val 0)) = Val 1
+constants (Pow (Val a) (Val b)) = Val (a ** b)
 constants (E (Val a)) = Val (exp a)
+constants (Ln (Val a)) = Val (log a)
 constants x = x
 
 inverse :: Expr String -> Expr String
@@ -188,8 +190,10 @@ groupBases orig@(Div (Mult (Val a) (Pow (Var l) (Val b))) (Var k))
 groupBases x = x
 
 groupExpr :: Expr String -> Expr String
+groupExpr orig@(Add (Mult (Val a) x) (Mult (Val b) y)) = if x == y then Mult (Val (a + b)) x else orig
 groupExpr orig@(Add x (Mult (Val a) y)) = if x == y then Mult (Val (a + 1)) x else orig
 groupExpr orig@(Add (Mult (Val a) y) x) = if x == y then Mult (Val (a + 1)) x else orig
+groupExpr orig@(Sub (Mult (Val a) x) (Mult (Val b) y)) = if x == y then Mult (Val (a - b)) x else orig
 groupExpr orig@(Sub x (Mult (Val a) y)) = if x == y then Mult x (Val (1 - a)) else orig
 groupExpr orig@(Sub (Mult (Val a) y) x) = if x == y then Mult x (Val (a - 1)) else orig
 groupExpr orig@(Add x y) = if x == y then Mult (Val 2) x else orig

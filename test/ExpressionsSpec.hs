@@ -18,6 +18,10 @@ mainSpec =
       identitySpec
       zeroSpec
       constantsSpec
+      inverseSpec
+      groupExprSpec
+      varToPowSpec
+      powToVarSpec
 
 evalSpec :: Spec
 evalSpec =
@@ -154,35 +158,35 @@ identitySpec =
           prop_returnsSame expr@(Mult x y) = isExprOrOperand expr x y
           prop_returnsSame expr@(Div x y) = isExprOrOperand expr x y
           prop_returnsSame expr = identity expr == expr
-       in verboseCheck $ forAll expressions prop_returnsSame
+       in property $ forAll expressions prop_returnsSame
 
 zeroSpec :: Spec
 zeroSpec =
   describe "zero" $
     it "recognises zeroer parameter for expr" $
       let prop_returnsZero expr = zero expr == expr || zero expr == Val 0
-       in verboseCheck $ forAll expressions prop_returnsZero
+       in property $ forAll expressions prop_returnsZero
 
 constantsSpec :: Spec
 constantsSpec =
-  describe "constants" $
+  describe "constants" $ do
     it "recognises constants to pair up" $
-      let isExprOrFunctionOf expr x y f = constants expr == expr || constants expr == Val (f x y) || constants expr == Val 1.0
-
-          prop_returnsFunctionOF expr@(Add (Val x) (Val y)) = isExprOrFunctionOf expr x y (+)
-          prop_returnsFunctionOF expr@(Sub (Val x) (Val y)) = isExprOrFunctionOf expr x y (-)
-          prop_returnsFunctionOF expr@(Mult (Val x) (Val y)) = isExprOrFunctionOf expr x y (*)
-          prop_returnsFunctionOF expr@(Div (Val x) (Val y)) = isExprOrFunctionOf expr x y (/)
-          prop_returnsFunctionOF expr@(Pow _ (Val y)) = isExprOrFunctionOf expr y y (**)
-          prop_returnsFunctionOF expr = constants expr == expr
-       in verboseCheck $ forAll expressions prop_returnsFunctionOF
+      let prop_returnsFunctionOF expr@(Add (Val x) (Val y)) = constants expr == Val (x + y)
+          prop_returnsFunctionOF expr@(Sub (Val x) (Val y)) = constants expr == Val (x - y)
+          prop_returnsFunctionOF expr@(Mult (Val x) (Val y)) = constants expr == Val (x * y)
+          prop_returnsFunctionOF expr@(Div (Val x) (Val y)) = constants expr == Val (x / y)
+          prop_returnsFunctionOF expr@(Pow (Val x) (Val y)) = constants expr == Val (x ** y)
+          prop_returnsFunctionOF expr@(E (Val y)) = constants expr == Val (exp y)
+          prop_returnsFunctionOF expr@(Ln (Val y)) = constants expr == Val (log y)
+          prop_returnsFunctionOF x = constants x == x
+       in property $ forAll expressions prop_returnsFunctionOF
 
 inverseSpec :: Spec
 inverseSpec =
   describe "inverse" $ do
     it "recognises inverses to cancel" $
       let isExprOrInverse expr x y = inverse expr == x || inverse expr == y
-          arbitraryInversePairs =
+          inversePairExpressions =
             let x = Val <$> arbitrary
                 y = Var <$> arbitrary
                 f1 x a = x <$> a
@@ -203,9 +207,53 @@ inverseSpec =
           prop_returnsInverseCancelledOut expr@(Div x y) = isExprOrInverse expr x y
           prop_returnsInverseCancelledOut expr@(E x) = isExprOrInverse expr x x
           prop_returnsInverseCancelledOut expr@(Ln x) = isExprOrInverse expr x x
-       in verboseCheck $ forAll (oneof arbitraryInversePairs) prop_returnsInverseCancelledOut
-    it "is complete" $
-      verboseCheck $ forAll expressions (const True)
+          prop_returnsInverseCancelledOut x = inverse x == x
+       in verboseCheck $ forAll (oneof (expressions : inversePairExpressions)) prop_returnsInverseCancelledOut
+
+groupExprSpec :: Spec
+groupExprSpec =
+  describe "groupExpr" $ do
+    it "recognises exprs to group" $
+      let prop_isConstantByExpr expr = case groupExpr expr of
+            Mult (Val _) _ -> True
+            Val 2 -> True
+            Val 0 -> True
+            _ -> groupExpr expr == expr
+          inversePairExpressions =
+            let x = Val <$> arbitrary
+                y = expressions
+                f2 f a b = f <$> a <*> b
+             in [ f2 Add x (f2 Mult y x),
+                  f2 Add (f2 Mult y x) x,
+                  f2 Sub (f2 Mult y x) x,
+                  f2 Sub x (f2 Mult y x)
+                ]
+       in verboseCheck $ forAll (oneof (expressions : inversePairExpressions)) prop_isConstantByExpr
+
+varToPowSpec :: Spec
+varToPowSpec =
+  describe "varToPow" $ do
+    it "changes any Var x to a Pow x 1" $
+      let prop_isNowPow (Var x) = varToPow (Var x) == Pow (Var x) (Val 1)
+          prop_isNowPow x = varToPow x == x
+       in verboseCheck $ forAll expressions prop_isNowPow
+
+powToVarSpec :: Spec
+powToVarSpec =
+  describe "powToVar" $ do
+    it "changes any Pow x 1 to Var x" $
+      let prop_isNowVar (Pow (Var x) (Val 1)) = powToVar (Pow (Var x) (Val 1)) == Var x
+          prop_isNowVar x = powToVar x == x
+       in verboseCheck $ forAll expressions prop_isNowVar
+
+unnecessaryOneSpec :: Spec
+unnecessaryOneSpec =
+  describe "unnecessaryOneSpec" $ do
+    it "removes (Val 1) from Mult/Div combos" $
+      let prop_isOneMultOrDivExpr orig@(Mult (Div (Val 1) y) z) = unnecessaryOne orig == Div z y
+          prop_isOneMultOrDivExpr orig@(Mult z (Div (Val 1) y)) = unnecessaryOne orig == Div z y
+          prop_isOneMultOrDivExpr x = unnecessaryOne x == x
+       in verboseCheck $ forAll expressions prop_isOneMultOrDivExpr
 
 expressions :: Gen (Expr String)
 expressions =
@@ -214,9 +262,9 @@ expressions =
       Sub <$> valExpressions <*> valExpressions,
       Mult <$> valExpressions <*> valExpressions,
       Div <$> valExpressions <*> nonZeroValExpression,
-      Pow <$> valExpressions <*> valExpressions,
+      Pow <$> valExpressions <*> smallIntValExpression,
       E <$> valExpressions,
-      Ln <$> valExpressions
+      Ln <$> nonZeroValExpression
     ]
 
 valExpressions :: Gen (Expr a)
@@ -224,3 +272,6 @@ valExpressions = oneof [return (Val 0), return (Val 1), Val <$> arbitrary]
 
 nonZeroValExpression :: Gen (Expr a)
 nonZeroValExpression = oneof [return (Val 1), Val <$> arbitrary `suchThat` (> 0)]
+
+smallIntValExpression :: Gen (Expr a)
+smallIntValExpression = Val <$> fmap fromIntegral (arbitrary :: Gen Int)
