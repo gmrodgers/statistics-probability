@@ -20,6 +20,8 @@ mainSpec =
       constantsSpec
       inverseSpec
       groupExprSpec
+      groupBasesSpec
+      unnecessaryOneSpec
       varToPowSpec
       powToVarSpec
 
@@ -230,6 +232,36 @@ groupExprSpec =
                 ]
        in verboseCheck $ forAll (oneof (expressions : inversePairExpressions)) prop_isConstantByExpr
 
+groupBasesSpec :: Spec
+groupBasesSpec =
+  describe "groupBases" $ do
+    it "recognises bases to group" $
+      let prop_isPowMultiple expr = case groupBases expr of
+            Pow _ _ -> True
+            Mult _ (Pow _ _) -> True
+            _ -> groupBases expr == expr
+          inversePairExpressions =
+            let base = expressions
+                x = Pow <$> base <*> expressions
+                y = Pow <$> base <*> expressions
+
+                f2 f a b = f <$> a <*> b
+             in [ f2 Mult x y,
+                  f2 Div x y,
+                  f2 Mult x (f2 Mult y expressions),
+                  f2 Div x (f2 Mult y expressions)
+                ]
+       in verboseCheck $ forAll (oneof (expressions : inversePairExpressions)) prop_isPowMultiple
+
+unnecessaryOneSpec :: Spec
+unnecessaryOneSpec =
+  describe "unnecessaryOneSpec" $ do
+    it "removes (Val 1) from Mult/Div combos" $
+      let prop_isOneMultOrDivExpr orig@(Mult (Div (Val 1) y) z) = unnecessaryOne orig == Div z y
+          prop_isOneMultOrDivExpr orig@(Mult z (Div (Val 1) y)) = unnecessaryOne orig == Div z y
+          prop_isOneMultOrDivExpr x = unnecessaryOne x == x
+       in verboseCheck $ forAll expressions prop_isOneMultOrDivExpr
+
 varToPowSpec :: Spec
 varToPowSpec =
   describe "varToPow" $ do
@@ -246,14 +278,7 @@ powToVarSpec =
           prop_isNowVar x = powToVar x == x
        in verboseCheck $ forAll expressions prop_isNowVar
 
-unnecessaryOneSpec :: Spec
-unnecessaryOneSpec =
-  describe "unnecessaryOneSpec" $ do
-    it "removes (Val 1) from Mult/Div combos" $
-      let prop_isOneMultOrDivExpr orig@(Mult (Div (Val 1) y) z) = unnecessaryOne orig == Div z y
-          prop_isOneMultOrDivExpr orig@(Mult z (Div (Val 1) y)) = unnecessaryOne orig == Div z y
-          prop_isOneMultOrDivExpr x = unnecessaryOne x == x
-       in verboseCheck $ forAll expressions prop_isOneMultOrDivExpr
+-- GENERATORS FOR QUICKCHECK TESTS
 
 expressions :: Gen (Expr String)
 expressions =

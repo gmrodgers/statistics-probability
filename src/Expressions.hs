@@ -145,59 +145,49 @@ inverse (Ln (E x)) = x
 inverse x = x
 
 groupBases :: Expr String -> Expr String
-groupBases orig@(Mult (Pow x (Val a)) (Pow y (Val b)))
-  | x == y = Pow x (Val (a + b))
+groupBases orig@(Mult (Pow x z1) (Pow y z2))
+  | x == y = Pow x (Add z1 z2)
   | otherwise = orig
-groupBases orig@(Div (Pow x (Val a)) (Pow y (Val b)))
-  | x == y = Pow x (Val (a - b))
+groupBases orig@(Div (Pow x z1) (Pow y z2))
+  | x == y = Pow x (Sub z1 z2)
   | otherwise = orig
-groupBases orig@(Mult (Var k) (Pow (Var l) (Val b)))
-  | l == k = Pow (Var l) (Val (1 + b))
+groupBases orig@(Mult x (Mult a (Pow y z)))
+  | x == y = Mult a (Pow x (Add z (Val 1)))
   | otherwise = orig
-groupBases orig@(Mult (Pow (Var l) (Val b)) (Var k))
-  | l == k = Pow (Var l) (Val (1 + b))
+groupBases orig@(Mult (Mult a (Pow y z)) x)
+  | x == y = Mult a (Pow x (Add z (Val 1)))
   | otherwise = orig
-groupBases orig@(Mult (Var k) (Mult (Val a) (Var l)))
-  | l == k = Mult (Val a) (Pow (Var k) (Val 2))
+groupBases orig@(Mult x (Mult a y))
+  | x == y = Mult a (Pow x (Val 2))
   | otherwise = orig
-groupBases orig@(Mult (Mult (Val a) (Var l)) (Var k))
-  | l == k = Mult (Val a) (Pow (Var k) (Val 2))
+groupBases orig@(Mult (Mult a y) x)
+  | x == y = Mult a (Pow x (Val 2))
   | otherwise = orig
-groupBases orig@(Div (Var k) (Mult (Val a) (Var l)))
-  | l == k = Div (Val 1) (Val a)
+groupBases orig@(Div x (Mult a (Pow y z)))
+  | x == y = Mult a (Pow x (Sub (Val 1) z))
   | otherwise = orig
-groupBases orig@(Div (Mult (Val a) (Var l)) (Var k))
-  | l == k = Val a
-  | otherwise = orig
-groupBases orig@(Mult (Var k) (Mult (Val a) (Pow (Var l) (Val b))))
-  | l == k = Mult (Val a) (Pow (Var l) (Val (b + 1)))
-  | otherwise = orig
-groupBases orig@(Mult (Mult (Val a) (Pow (Var l) (Val b))) (Var k))
-  | l == k = Mult (Val a) (Pow (Var l) (Val (b + 1)))
-  | otherwise = orig
-groupBases orig@(Div (Pow (Var l) (Val a)) (Var k))
-  | l == k = Pow (Var l) (Val (a - 1))
-  | otherwise = orig
-groupBases orig@(Div (Var k) (Pow (Var l) (Val a)))
-  | l == k = Pow (Var l) (Val (1 - a))
-  | otherwise = orig
-groupBases orig@(Div (Var k) (Mult (Val a) (Pow (Var l) (Val b))))
-  | l == k = Mult (Val a) (Pow (Var l) (Val (1 - b)))
-  | otherwise = orig
-groupBases orig@(Div (Mult (Val a) (Pow (Var l) (Val b))) (Var k))
-  | l == k = Mult (Val a) (Pow (Var l) (Val (b - 1)))
+groupBases orig@(Div (Mult a (Pow y z)) x)
+  | x == y = Mult a (Pow x (Sub z (Val 1)))
   | otherwise = orig
 groupBases x = x
 
 groupExpr :: Expr String -> Expr String
-groupExpr orig@(Add (Mult (Val a) x) (Mult (Val b) y)) = if x == y then Mult (Val (a + b)) x else orig
-groupExpr orig@(Add x (Mult (Val a) y)) = if x == y then Mult (Val (a + 1)) x else orig
-groupExpr orig@(Add (Mult (Val a) y) x) = if x == y then Mult (Val (a + 1)) x else orig
-groupExpr orig@(Sub (Mult (Val a) x) (Mult (Val b) y)) = if x == y then Mult (Val (a - b)) x else orig
-groupExpr orig@(Sub x (Mult (Val a) y)) = if x == y then Mult x (Val (1 - a)) else orig
-groupExpr orig@(Sub (Mult (Val a) y) x) = if x == y then Mult x (Val (a - 1)) else orig
-groupExpr orig@(Add x y) = if x == y then Mult (Val 2) x else orig
-groupExpr orig@(Sub x y) = if x == y then Val 0 else orig
+groupExpr orig@(Add (Mult (Val a) x) (Mult (Val b) y)) =
+  if x == y then Mult (Val (a + b)) x else orig
+groupExpr orig@(Add x (Mult (Val a) y)) =
+  if x == y then Mult (Val (a + 1)) x else orig
+groupExpr orig@(Add (Mult (Val a) y) x) =
+  if x == y then Mult (Val (a + 1)) x else orig
+groupExpr orig@(Sub (Mult (Val a) x) (Mult (Val b) y)) =
+  if x == y then Mult (Val (a - b)) x else orig
+groupExpr orig@(Sub x (Mult (Val a) y)) =
+  if x == y then Mult x (Val (1 - a)) else orig
+groupExpr orig@(Sub (Mult (Val a) y) x) =
+  if x == y then Mult x (Val (a - 1)) else orig
+groupExpr orig@(Add x y) =
+  if x == y then Mult (Val 2) x else orig
+groupExpr orig@(Sub x y) =
+  if x == y then Val 0 else orig
 groupExpr x = x
 
 varToPow :: Expr String -> Expr String
