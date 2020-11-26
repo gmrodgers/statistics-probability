@@ -108,7 +108,7 @@ diffSpec =
         diff (E (Val 2)) `shouldBe` Val 0
         diff (E (Var "x")) `shouldBe` E (Var "x")
         diff (E (Mult (Val 2) (Var "x"))) `shouldBe` Mult (Val 2) (E (Mult (Val 2) (Var "x")))
-        diff (E (Pow (Var "x") (Val 2))) `shouldBe` Mult (Mult (Val 2) (Var "x")) (E (Pow (Var "x") (Val 2)))
+        diff (E (Pow (Var "x") (Val 2))) `shouldBe` Mult (E (Pow (Var "x") (Val 2))) (Mult (Val 2) (Var "x"))
     describe "Ln" $
       it "divides the differential of the operand by the operand" $ do
         diff (Ln (Var "x")) `shouldBe` Div (Val 1) (Var "x")

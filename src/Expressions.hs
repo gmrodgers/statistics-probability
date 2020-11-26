@@ -31,6 +31,10 @@ data Expr a
   | Val Float
   deriving (Eq, Show)
 
+commute :: Expr a -> Expr a
+commute (Add x y) = Add y x
+commute (Mult x y) = Mult y x
+
 -- works on leaves
 emap :: (Expr a -> Expr b) -> Expr a -> Expr b
 emap f (Add x y) = Add (emap f x) (emap f y)
@@ -88,20 +92,20 @@ diffH (Ln x) = Mult (Div (Val 1) x) (diffH x)
 
 identity :: Expr String -> Expr String
 identity (Add x (Val 0)) = x
-identity (Add (Val 0) x) = x
+identity orig@(Add (Val 0) _) = (identity . commute) orig
 identity (Sub x (Val 0)) = x
 identity (Mult x (Val 1)) = x
-identity (Mult (Val 1) x) = x
+identity orig@(Mult (Val 1) _) = (identity . commute) orig
 identity (Div x (Val 1)) = x
 identity x = x
 
 zero :: Expr String -> Expr String
-zero orig@(Add (Val a) (Val b))
-  | a == (- b) = Val 0
-  | otherwise = orig --- Should we replace -1.0 with Negate 1.0 so we dont have to use vals??
+-- zero orig@(Add (Val a) (Val b))
+--   | a == (- b) = Val 0
+--   | otherwise = orig --- Should we replace -1.0 with Negate 1.0 so we dont have to use vals??
 zero (Sub x y) = if x == y then Val 0 else Sub x y
 zero (Mult _ (Val 0)) = Val 0
-zero (Mult (Val 0) _) = Val 0
+zero orig@(Mult (Val 0) _) = (zero . commute) orig
 zero (Div (Val 0) _) = Val 0
 zero (Ln (Val 1)) = Val 0
 zero x = x
@@ -118,7 +122,7 @@ constants x = x
 
 inverse :: Expr String -> Expr String
 inverse (Add (Sub x y) z) = if y == z then x else Add (Sub x y) z
-inverse (Add z (Sub x y)) = if y == z then x else Add z (Sub x y)
+inverse orig@(Add _ (Sub _ _)) = (inverse . commute) orig
 inverse (Sub (Add x y) z)
   | x == z = y
   | y == z = x
@@ -128,7 +132,7 @@ inverse orig@(Sub (Val a) (Add (Val b) (Val c))) -- same negate issue as above s
   | (- c) == a = Val (- b)
   | otherwise = orig
 inverse (Mult (Div x y) z) = if y == z then x else Mult (Div x y) z
-inverse (Mult z (Div x y)) = if y == z then x else Mult z (Div x y)
+inverse orig@(Mult _ (Div _ _)) = (inverse . commute) orig
 inverse (Div (Mult x y) z)
   | x == z = y
   | y == z = x
@@ -148,20 +152,15 @@ groupBases :: Expr String -> Expr String
 groupBases orig@(Mult (Pow x z1) (Pow y z2))
   | x == y = Pow x (Add z1 z2)
   | otherwise = orig
-groupBases orig@(Div (Pow x z1) (Pow y z2))
-  | x == y = Pow x (Sub z1 z2)
-  | otherwise = orig
 groupBases orig@(Mult x (Mult a (Pow y z)))
-  | x == y = Mult a (Pow x (Add z (Val 1)))
-  | otherwise = orig
-groupBases orig@(Mult (Mult a (Pow y z)) x)
   | x == y = Mult a (Pow x (Add z (Val 1)))
   | otherwise = orig
 groupBases orig@(Mult x (Mult a y))
   | x == y = Mult a (Pow x (Val 2))
   | otherwise = orig
-groupBases orig@(Mult (Mult a y) x)
-  | x == y = Mult a (Pow x (Val 2))
+groupBases orig@(Mult (Mult _ _) _) = (groupBases . commute) orig
+groupBases orig@(Div (Pow x z1) (Pow y z2))
+  | x == y = Pow x (Sub z1 z2)
   | otherwise = orig
 groupBases orig@(Div x (Mult a (Pow y z)))
   | x == y = Mult a (Pow x (Sub (Val 1) z))
@@ -176,18 +175,15 @@ groupExpr orig@(Add (Mult (Val a) x) (Mult (Val b) y)) =
   if x == y then Mult (Val (a + b)) x else orig
 groupExpr orig@(Add x (Mult (Val a) y)) =
   if x == y then Mult (Val (a + 1)) x else orig
-groupExpr orig@(Add (Mult (Val a) y) x) =
-  if x == y then Mult (Val (a + 1)) x else orig
+groupExpr orig@(Add (Mult _ _) _) = (groupExpr . commute) orig
+groupExpr orig@(Add x y) =
+  if x == y then Mult (Val 2) x else orig
 groupExpr orig@(Sub (Mult (Val a) x) (Mult (Val b) y)) =
   if x == y then Mult (Val (a - b)) x else orig
 groupExpr orig@(Sub x (Mult (Val a) y)) =
   if x == y then Mult x (Val (1 - a)) else orig
 groupExpr orig@(Sub (Mult (Val a) y) x) =
   if x == y then Mult x (Val (a - 1)) else orig
-groupExpr orig@(Add x y) =
-  if x == y then Mult (Val 2) x else orig
-groupExpr orig@(Sub x y) =
-  if x == y then Val 0 else orig
 groupExpr x = x
 
 varToPow :: Expr String -> Expr String
@@ -200,7 +196,7 @@ powToVar x = x
 
 unnecessaryOne :: Expr String -> Expr String
 unnecessaryOne (Mult (Div (Val 1) x) y) = Div y x
-unnecessaryOne (Mult y (Div (Val 1) x)) = Div y x
+unnecessaryOne orig@(Mult _ (Div _ _)) = (unnecessaryOne . commute) orig
 unnecessaryOne x = x
 
 simplify :: Expr String -> Expr String
@@ -213,7 +209,7 @@ integrateH :: Expr String -> String -> Expr String
 integrateH (Add x y) wrt = Add (integrateH x wrt) (integrateH y wrt) -- Integrate down the tree
 integrateH (Sub x y) wrt = Sub (integrateH x wrt) (integrateH y wrt) -- Integrate down the tree
 integrateH (Mult (Val a) x) wrt = Mult (Val a) (integrateH x wrt)
-integrateH (Mult x (Val a)) wrt = Mult (integrateH x wrt) (Val a)
+integrateH orig@(Mult _ (Val _)) wrt = integrateH (commute orig) wrt
 integrateH (Pow (Var x) (Val a)) _ = Div (Pow (Var x) (Add (Val a) (Val 1))) (Add (Val a) (Val 1)) -- normal integration rule
 integrateH (Pow (Val a) (Var x)) _ = Div (Pow (Val a) (Var x)) (Ln (Val a)) -- 2^x -> 2^x / ln2
 integrateH (E (Val a)) wrt = Mult (E (Val a)) (Var wrt) -- e*2 -> x * e^2
