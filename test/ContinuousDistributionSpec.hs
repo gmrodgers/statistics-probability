@@ -4,6 +4,7 @@ module ContinuousDistributionSpec
 where
 
 import ContinuousDistribution
+import Expressions
 import Test.Hspec
 import Test.QuickCheck
 
@@ -39,7 +40,7 @@ expSpec =
             property $ forAll genPos (prop_integratesToOneOverFullDomainViaNumericalMethod 0.05)
           it "integrates to correct probability " $
             numericalCDF (Exp 1) 0 1 1000 `shouldSatisfy` withinErrorOf 0.05 0.63212
-        xdescribe "statistics" $ do
+        fdescribe "statistics" $ do
           it "has correct mean" $
             let equivalent = Custom (exponentialPDF 1.0) 0 128
                 exponential = Exp 1.0

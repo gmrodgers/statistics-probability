@@ -1,5 +1,7 @@
 module Expressions
   ( Expr (..),
+    inverseOp,
+    solveFor,
     eval,
     diffH,
     diff,
@@ -16,6 +18,7 @@ module Expressions
     zero,
     identity,
     varToPow,
+    string,
   )
 where
 
@@ -59,6 +62,79 @@ apply f (Pow x y) = f (Pow (apply f x) (apply f y))
 apply f (E x) = f (E (apply f x))
 apply f (Ln x) = f (Ln (apply f x))
 
+inBrackets :: String -> String
+inBrackets x = "(" ++ x ++ ")"
+
+string :: Expr String -> String
+string (Add x y) = inBrackets $ string x ++ "+" ++ string y
+string (Sub x y) = inBrackets $ string x ++ "-" ++ string y
+string (Mult x y) = inBrackets $ string x ++ "*" ++ string y
+string (Div x y) = inBrackets $ string x ++ "/" ++ string y
+string (Pow x y) = inBrackets $ string x ++ "^" ++ string y
+string (E x) = inBrackets $ "e^" ++ string x
+string (Ln x) = inBrackets $ "ln" ++ string x
+string (Val a) = show a
+string (Var l) = l
+
+foldExpr :: Expr a -> (Expr a -> b -> b) -> b -> b
+foldExpr x f acc = case x of
+  Add y1 y2 -> foldExpr y1 f (foldExpr y2 f acc)
+  Sub y1 y2 -> foldExpr y1 f (foldExpr y2 f acc)
+  Mult y1 y2 -> foldExpr y1 f (foldExpr y2 f acc)
+  Div y1 y2 -> foldExpr y1 f (foldExpr y2 f acc)
+  Pow y1 y2 -> foldExpr y1 f (foldExpr y2 f acc)
+  E y1 -> foldExpr y1 f acc
+  Ln y1 -> foldExpr y1 f acc
+  y1 -> f y1 acc
+
+containsVar :: Expr String -> String -> Bool
+containsVar x l = foldExpr (emap (isVarL l) x) anyExpr False
+  where
+    isVarL l (Var k) = Var (l == k)
+    isVarL _ (Val _) = Var False
+
+    anyExpr (Var b) acc = b || acc
+    anyExpr _ acc = acc
+
+inverseOp :: Expr String -> Expr String -> String -> (Expr String, Expr String)
+inverseOp (Add x y) base wrt
+  | containsVar x wrt && containsVar y wrt = error "i cant handle a wrt variable in both branches"
+  | not (containsVar x wrt || containsVar y wrt) = error "i cant handle no wrt variables in either branch"
+  | containsVar x wrt = (x, Sub base y)
+  | containsVar y wrt = (y, Sub base x)
+inverseOp (Sub x y) base wrt
+  | containsVar x wrt && containsVar y wrt = error "i cant handle a wrt variable in both branches"
+  | not (containsVar x wrt || containsVar y wrt) = error "i cant handle no wrt variables in either branch"
+  | containsVar x wrt = (x, Add base y)
+  | containsVar y wrt = (y, Div (Add base x) (Val (-1)))
+inverseOp (Mult x y) base wrt
+  | containsVar x wrt && containsVar y wrt = error "i cant handle a wrt variable in both branches"
+  | not (containsVar x wrt || containsVar y wrt) = error "i cant handle no wrt variables in either branch"
+  | containsVar x wrt = (x, Div base y)
+  | containsVar y wrt = (y, Div base x)
+inverseOp (Div x y) base wrt
+  | containsVar x wrt && containsVar y wrt = error "i cant handle a wrt variable in both branches"
+  | not (containsVar x wrt || containsVar y wrt) = error "i cant handle no wrt variables in either branch"
+  | containsVar x wrt = (x, Mult base y)
+  | containsVar y wrt = (y, Div x base)
+inverseOp (Pow x y) base wrt
+  | containsVar x wrt && containsVar y wrt = error "i cant handle a wrt variable in both branches"
+  | not (containsVar x wrt || containsVar y wrt) = error "i cant handle no wrt variables in either branch"
+  | containsVar x wrt = (x, Pow base (Div (Val 1) y))
+  | containsVar y wrt = (y, Div (Ln base) (Ln x))
+inverseOp (E x) base wrt
+  | not (containsVar x wrt) = error "i cant handle no wrt variables in either branch"
+  | containsVar x wrt = (x, Ln base)
+inverseOp (Ln x) base wrt
+  | not (containsVar x wrt) = error "i cant handle no wrt variables in either branch"
+  | containsVar x wrt = (x, E base)
+
+solveFor x y v = solveFor' v (x, y)
+  where
+    solveFor' :: String -> (Expr String, Expr String) -> Expr String
+    solveFor' v (Var l, y) = if v == l then y else error "should not be here"
+    solveFor' v (x, y) = solveFor' v (inverseOp x y v)
+
 performArithmetic :: Expr String -> Float
 performArithmetic (Add x y) = performArithmetic x + performArithmetic y
 performArithmetic (Sub x y) = performArithmetic x - performArithmetic y
@@ -70,14 +146,14 @@ performArithmetic (Ln x) = log (performArithmetic x)
 performArithmetic (Val a) = a
 performArithmetic (Var _) = error "should not be performed on Expr with Vars"
 
-substitute :: (String, Float) -> Expr String -> Expr String
+substitute :: (String, Expr String) -> Expr String -> Expr String
 substitute = emap . varSub
   where
-    varSub (k, v) (Var l) = if l == k then Val v else Var l
+    varSub (k, x) (Var l) = if l == k then x else Var l
     varSub _ x = x
 
 eval :: Expr String -> [(String, Float)] -> Float
-eval x varSubs = performArithmetic $ foldl (flip substitute) x varSubs
+eval x varSubs = performArithmetic $ foldl (flip substitute) x (map (\(l, a) -> (l, Val a)) varSubs)
 
 diffH :: Expr String -> Expr String
 diffH (Add x y) = Add (diffH x) (diffH y) -- Addition Rule
@@ -210,13 +286,27 @@ integrateH (Add x y) wrt = Add (integrateH x wrt) (integrateH y wrt) -- Integrat
 integrateH (Sub x y) wrt = Sub (integrateH x wrt) (integrateH y wrt) -- Integrate down the tree
 integrateH (Mult (Val a) x) wrt = Mult (Val a) (integrateH x wrt)
 integrateH orig@(Mult _ (Val _)) wrt = integrateH (commute orig) wrt
+integrateH (Mult u v) wrt = Sub (Mult u (integrateH v wrt)) (integrateH (Mult (diff u) v) wrt)
+integrateH (Div x y) _ = if diff y == x then y else error "no implemented"
 integrateH (Pow (Var x) (Val a)) _ = Div (Pow (Var x) (Add (Val a) (Val 1))) (Add (Val a) (Val 1)) -- normal integration rule
 integrateH (Pow (Val a) (Var x)) _ = Div (Pow (Val a) (Var x)) (Ln (Val a)) -- 2^x -> 2^x / ln2
 integrateH (E (Val a)) wrt = Mult (E (Val a)) (Var wrt) -- e*2 -> x * e^2
-integrateH (E x) _ = Div (E x) (diffH x) -- e^f(x) -> e^f(x) / f'(x)
+integrateH (E (Var l)) wrt = if l == wrt then E (Var l) else Mult (Var wrt) (E (Var l))
+integrateH (E x) wrt = integrateBySubstitution E x wrt
 integrateH (Ln (Val a)) wrt = Mult (Ln (Val a)) (Var wrt) -- ln2 -> x * ln2
+integrateH (Ln x) wrt =
+  let u = Ln x
+      dv = Val 1
+   in Sub (Mult u (integrateH dv wrt)) (integrateH (simplify (Mult (diff u) dv)) wrt)
 integrateH (Var x) wrt = integrateH (Pow (Var x) (Val 1)) wrt -- x -> x^1 then integrate
 integrateH (Val a) wrt = Mult (Val a) (Var wrt) -- add variable we're integrated wrt
+
+integrateBySubstitution :: (Expr String -> Expr String) -> Expr String -> String -> Expr String
+integrateBySubstitution f x wrt =
+  let u = Var "u"
+      solvedX = solveFor x u wrt
+      solvedDX = solveFor (Mult (Var "dx") (diff x)) (Val 1) "dx"
+   in substitute ("u", x) (Mult (substitute ("x", solvedX) solvedDX) (integrateH (f u) "u"))
 
 integrate :: Expr String -> String -> Expr String
 integrate x wrt = Add (simplify $ integrateH x wrt) (Var "C")

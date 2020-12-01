@@ -12,6 +12,8 @@ mainSpec :: Spec
 mainSpec =
   parallel $
     describe "expressions" $ do
+      solveForSpec
+      inverseOpSpec
       evalSpec
       diffSpec
       integrateSpec
@@ -24,6 +26,37 @@ mainSpec =
       unnecessaryOneSpec
       varToPowSpec
       powToVarSpec
+
+inverseOpSpec :: Spec
+inverseOpSpec =
+  describe "inverseOp" $ do
+    it "cancels out Adds" $ do
+      inverseOp (Add (Var "x") (Val 1)) (Var "u") "x" `shouldBe` (Var "x", Sub (Var "u") (Val 1))
+      inverseOp (Add (Val 1) (Var "x")) (Var "u") "x" `shouldBe` (Var "x", Sub (Var "u") (Val 1))
+    it "cancels out Subs" $ do
+      inverseOp (Sub (Var "x") (Val 1)) (Var "u") "x" `shouldBe` (Var "x", Add (Var "u") (Val 1))
+      inverseOp (Sub (Val 1) (Var "x")) (Var "u") "x" `shouldBe` (Var "x", Div (Add (Var "u") (Val 1)) (Val (-1)))
+    it "cancels out Mults" $ do
+      inverseOp (Mult (Var "x") (Val 1)) (Var "u") "x" `shouldBe` (Var "x", Div (Var "u") (Val 1))
+      inverseOp (Mult (Val 1) (Var "x")) (Var "u") "x" `shouldBe` (Var "x", Div (Var "u") (Val 1))
+    it "cancels out Divs" $ do
+      inverseOp (Div (Var "x") (Val 1)) (Var "u") "x" `shouldBe` (Var "x", Mult (Var "u") (Val 1))
+      inverseOp (Div (Val 1) (Var "x")) (Var "u") "x" `shouldBe` (Var "x", Div (Val 1) (Var "u"))
+    it "cancels out Pow" $ do
+      inverseOp (Pow (Var "x") (Val 1)) (Var "u") "x" `shouldBe` (Var "x", Pow (Var "u") (Div (Val 1) (Val 1)))
+      inverseOp (Pow (Val 1) (Var "x")) (Var "u") "x" `shouldBe` (Var "x", Div (Ln (Var "u")) (Ln (Val 1)))
+    it "cancels out E" $ do
+      inverseOp (E (Var "x")) (Var "u") "x" `shouldBe` (Var "x", Ln (Var "u"))
+    it "cancels out Ln" $ do
+      inverseOp (Ln (Var "x")) (Var "u") "x" `shouldBe` (Var "x", E (Var "u"))
+
+solveForSpec :: Spec
+solveForSpec =
+  describe "solveFor" $
+    it "solves for x" $ do
+      solveFor (Add (Sub (Var "x") (Var "y")) (Var "z")) (Val 1) "x" `shouldBe` Add (Sub (Val 1) (Var "z")) (Var "y")
+      solveFor (Add (Sub (Var "x") (Var "y")) (Var "z")) (Val 1) "z" `shouldBe` Sub (Val 1) (Sub (Var "x") (Var "y"))
+      solveFor (Pow (Sub (Var "x") (Var "y")) (Var "z")) (Val 1) "z" `shouldBe` Div (Ln (Val 1)) (Ln (Sub (Var "x") (Var "y")))
 
 evalSpec :: Spec
 evalSpec =
@@ -143,11 +176,21 @@ integrateSpec =
     describe "E" $ do
       it "multiples by variable wrt if no variable" $
         integrateH (E (Val 2)) "x" `shouldBe` Mult (E (Val 2)) (Var "x")
-      it "divides by the constant in the exponent" $
-        integrateH (E (Var "x")) "x" `shouldBe` Div (E (Var "x")) (Val 1.0)
+      it "can returns vars" $
+        integrateH (E (Var "x")) "x" `shouldBe` E (Var "x")
+      it "can use substitution for complicated exponents" $
+        integrateH (E (Mult (Val 2) (Var "x"))) "x" `shouldBe` Mult (Div (Val 1) (Val 2)) (E (Mult (Val 2) (Var "x")))
     describe "Ln" $ do
       it "multiples by variable wrt if no variable" $
         integrateH (Ln (Val 2)) "x" `shouldBe` Mult (Ln (Val 2)) (Var "x")
+      it "can do integration by parts" $
+        integrateH (Ln (Var "x")) "x"
+          `shouldBe` Sub (Mult (Ln (Var "x")) (Mult (Val 1) (Var "x"))) (Var "x")
+      xit "can use substitution for complicated logarithms" $
+        integrateH (Ln (Mult (Val 2) (Var "x"))) "x"
+          `shouldBe` Sub
+            (Mult (Ln (Mult (Val 2) (Var "x"))) (Mult (Val 1) (Var "x")))
+            (Mult (Val 1) (Var "x"))
 
 identitySpec :: Spec
 identitySpec =
