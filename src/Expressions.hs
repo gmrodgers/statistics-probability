@@ -22,6 +22,8 @@ module Expressions
   )
 where
 
+import Data.Bifunctor
+
 data Expr a
   = Add (Expr a) (Expr a)
   | Sub (Expr a) (Expr a)
@@ -153,7 +155,7 @@ substitute = emap . varSub
     varSub _ x = x
 
 eval :: Expr String -> [(String, Float)] -> Float
-eval x varSubs = performArithmetic $ foldl (flip substitute) x (map (\(l, a) -> (l, Val a)) varSubs)
+eval x varSubs = performArithmetic $ foldl (flip substitute) x (map (Data.Bifunctor.second Val) varSubs)
 
 diffH :: Expr String -> Expr String
 diffH (Add x y) = Add (diffH x) (diffH y) -- Addition Rule
