@@ -4,6 +4,7 @@ module ContinuousDistributionSpec
 where
 
 import ContinuousDistribution
+import Debug.Trace
 import Expressions
 import Test.Hspec
 import Test.QuickCheck
@@ -42,10 +43,14 @@ expSpec =
             numericalCDF (Exp 1) 0 1 1000 `shouldSatisfy` withinErrorOf 0.05 0.63212
         describe "statistics" $ do
           it "has correct mean" $
-            let equivalent = Custom (exponentialPDF 1.0) 0 128
-                exponential = Exp 1.0
-             in mean equivalent `shouldBe` mean exponential
+            let prop_hardcodedMeanShouldEqualCalculatedMean n =
+                  let equivalent = Custom (exponentialPDF n) 0 128
+                      exponential = Exp n
+                   in withinErrorOf (mean exponential) 0.01 (mean equivalent)
+             in property $ forAll genPos prop_hardcodedMeanShouldEqualCalculatedMean
           xit "has correct variance" $
-            let equivalent = Custom (exponentialPDF 1.0) 0 128
-                exponential = Exp 1.0
-             in variance equivalent `shouldBe` variance exponential
+            let prop_hardcodedVarianceShouldEqualCalculatedMean n =
+                  let equivalent = Custom (exponentialPDF n) 0 128
+                      exponential = Exp n
+                   in traceShow (variance exponential, variance equivalent) $ withinErrorOf (variance exponential) 0.01 (variance equivalent)
+             in property $ forAll genPos prop_hardcodedVarianceShouldEqualCalculatedMean
