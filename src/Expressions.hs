@@ -298,7 +298,7 @@ integrateH (Add x y) wrt = Add (integrateH x wrt) (integrateH y wrt) -- Integrat
 integrateH (Sub x y) wrt = Sub (integrateH x wrt) (integrateH y wrt) -- Integrate down the tree
 integrateH (Mult (Val a) x) wrt = Mult (Val a) (integrateH x wrt)
 integrateH orig@(Mult _ (Val _)) wrt = integrateH (commute orig) wrt
-integrateH (Mult u v) wrt = integrateByParts u v wrt
+integrateH (Mult x y) wrt = integrateByParts x y wrt
 integrateH (Div x y) _ = if diff y == x then y else error "no implemented"
 integrateH (Pow (Var x) (Val a)) _ = Div (Pow (Var x) (Add (Val a) (Val 1))) (Add (Val a) (Val 1)) -- normal integration rule
 integrateH (Pow (Val a) (Var x)) _ = Div (Pow (Val a) (Var x)) (Ln (Val a)) -- 2^x -> 2^x / ln2
@@ -321,7 +321,7 @@ integrateByParts :: Expr String -> Expr String -> String -> Expr String
 integrateByParts u dv wrt =
   let du = diff u
       v = integrateH dv wrt
-   in Sub (Mult u v) (integrateH (Mult du v) wrt)
+   in Sub (simplify (Mult u v)) (integrateH (simplify (Mult du v)) wrt)
 
 integrate :: Expr String -> String -> Expr String
 integrate x wrt = Add (simplify $ integrateH x wrt) (Var "C")

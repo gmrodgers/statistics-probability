@@ -40,8 +40,12 @@ expSpec =
             property $ forAll genPos (prop_integratesToOneOverFullDomainViaNumericalMethod 0.05)
           it "integrates to correct probability " $
             numericalCDF (Exp 1) 0 1 1000 `shouldSatisfy` withinErrorOf 0.05 0.63212
-        fdescribe "statistics" $ do
+        describe "statistics" $ do
           it "has correct mean" $
             let equivalent = Custom (exponentialPDF 1.0) 0 128
                 exponential = Exp 1.0
              in mean equivalent `shouldBe` mean exponential
+          xit "has correct variance" $
+            let equivalent = Custom (exponentialPDF 1.0) 0 128
+                exponential = Exp 1.0
+             in variance equivalent `shouldBe` variance exponential
