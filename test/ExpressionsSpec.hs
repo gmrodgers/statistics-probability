@@ -140,11 +140,13 @@ diffSpec =
       it "multiples E by the differential of the exponent" $ do
         diff (E (Val 2)) `shouldBe` Val 0
         diff (E (Var "x")) `shouldBe` E (Var "x")
-        diff (E (Mult (Val 2) (Var "x"))) `shouldBe` Mult (Val 2) (E (Mult (Val 2) (Var "x")))
+        diff (E (Mult (Val 2) (Var "x"))) `shouldBe` Mult (E (Mult (Val 2) (Var "x"))) (Val 2)
         diff (E (Pow (Var "x") (Val 2))) `shouldBe` Mult (E (Pow (Var "x") (Val 2))) (Mult (Val 2) (Var "x"))
-    describe "Ln" $
-      it "divides the differential of the operand by the operand" $ do
+    describe "Ln" $ do
+      it "divides the differential of the operand by the operand" $
         diff (Ln (Var "x")) `shouldBe` Div (Val 1) (Var "x")
+      it "multiples E by the differential of the logarithm" $
+        diff (Ln (Mult (Val 2) (Var "x"))) `shouldBe` Div (Val 2) (Mult (Val 2) (Var "x"))
     describe "Chain Rule" $
       it "applies chain rule: d/dx f(g(x)) = f'(g(x)) * g'(x)" $
         diff (Ln (Pow (Var "x") (Val 2))) `shouldBe` Div (Mult (Val 2) (Var "x")) (Pow (Var "x") (Val 2))

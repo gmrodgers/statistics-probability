@@ -164,9 +164,19 @@ diffH (Mult x y) = Add (Mult (diffH x) y) (Mult (diffH y) x) -- Product Rule
 diffH (Div x y) = Div (Sub (Mult (diffH x) y) (Mult (diffH y) x)) (Pow y (Val 2)) -- Quotient Rule
 diffH (Var _) = Val 1 -- Unitary Power
 diffH (Val _) = Val 0 -- Constant
-diffH (Pow x (Val a)) = Mult (diffH x) (Mult (Val a) (Pow x (Sub (Val a) (Val 1)))) -- Power Rule
-diffH (E x) = Mult (diffH x) (E x) -- e Exponent
-diffH (Ln x) = Mult (Div (Val 1) x) (diffH x)
+diffH (Pow (Var l) (Val a)) = Mult (Val a) (Pow (Var l) (Sub (Val a) (Val 1))) -- Power Rule
+diffH (Pow x (Val a)) = chainRule (`Pow` Val a) x
+diffH (E (Var l)) = E (Var l)
+diffH (E x) = chainRule E x
+diffH (Ln (Var l)) = Div (Val 1) (Var l)
+diffH (Ln x) = chainRule Ln x
+
+chainRule :: (Expr String -> Expr String) -> Expr String -> Expr String
+chainRule op x =
+  let u = Var "u"
+      du = diffH (op u)
+      dx = diffH x
+   in substitute ("u", x) (Mult du dx)
 
 identity :: Expr String -> Expr String
 identity (Add x (Val 0)) = x
