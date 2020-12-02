@@ -1,6 +1,7 @@
 module Expressions
   ( Expr (..),
     inverseOp,
+    typedOp,
     solveFor,
     eval,
     diffH,
@@ -32,6 +33,7 @@ data Expr a
   | Pow (Expr a) (Expr a)
   | E (Expr a)
   | Ln (Expr a)
+  | Neg (Expr a)
   | Var a
   | Val Float
   deriving (Eq, Show)
@@ -49,6 +51,7 @@ emap f (Div x y) = Div (emap f x) (emap f y)
 emap f (Pow x y) = Pow (emap f x) (emap f y)
 emap f (E x) = E (emap f x)
 emap f (Ln x) = Ln (emap f x)
+emap f (Neg x) = Neg (emap f x)
 emap f (Var x) = f (Var x)
 emap f (Val a) = f (Val a)
 
@@ -63,6 +66,7 @@ apply f (Div x y) = f (Div (apply f x) (apply f y))
 apply f (Pow x y) = f (Pow (apply f x) (apply f y))
 apply f (E x) = f (E (apply f x))
 apply f (Ln x) = f (Ln (apply f x))
+apply f (Neg x) = f (Neg (apply f x))
 
 inBrackets :: String -> String
 inBrackets x = "(" ++ x ++ ")"
@@ -75,6 +79,7 @@ string (Div x y) = inBrackets $ string x ++ "/" ++ string y
 string (Pow x y) = inBrackets $ string x ++ "^" ++ string y
 string (E x) = inBrackets $ "e^" ++ string x
 string (Ln x) = inBrackets $ "ln" ++ string x
+string (Neg x) = inBrackets $ "-" ++ string x
 string (Val a) = show a
 string (Var l) = l
 
@@ -87,6 +92,7 @@ foldExpr x f acc = case x of
   Pow y1 y2 -> foldExpr y1 f (foldExpr y2 f acc)
   E y1 -> foldExpr y1 f acc
   Ln y1 -> foldExpr y1 f acc
+  Neg y1 -> foldExpr y1 f acc
   y1 -> f y1 acc
 
 containsVar :: Expr String -> String -> Bool
@@ -125,11 +131,14 @@ inverseOp (Pow x y) base wrt
   | containsVar x wrt = (x, Pow base (Div (Val 1) y))
   | containsVar y wrt = (y, Div (Ln base) (Ln x))
 inverseOp (E x) base wrt
-  | not (containsVar x wrt) = error "i cant handle no wrt variables in either branch"
+  | not (containsVar x wrt) = error "cant handle no wrt variables"
   | containsVar x wrt = (x, Ln base)
 inverseOp (Ln x) base wrt
-  | not (containsVar x wrt) = error "i cant handle no wrt variables in either branch"
+  | not (containsVar x wrt) = error "cant handle no wrt variables"
   | containsVar x wrt = (x, E base)
+inverseOp (Neg x) base wrt
+  | not (containsVar x wrt) = error "cant handle no wrt variables in either branch"
+  | containsVar x wrt = (x, Neg base)
 
 solveFor :: Expr String -> Expr String -> String -> Expr String
 solveFor x y v = solveFor' v (x, y)
@@ -146,6 +155,7 @@ performArithmetic (Div x y) = performArithmetic x / performArithmetic y
 performArithmetic (Pow x y) = performArithmetic x ** performArithmetic y
 performArithmetic (E x) = exp (performArithmetic x)
 performArithmetic (Ln x) = log (performArithmetic x)
+performArithmetic (Neg x) = negate (performArithmetic x)
 performArithmetic (Val a) = a
 performArithmetic (Var _) = error "should not be performed on Expr with Vars"
 
@@ -171,6 +181,7 @@ diffH (E (Var l)) = E (Var l)
 diffH (E x) = chainRule E x
 diffH (Ln (Var l)) = Div (Val 1) (Var l)
 diffH (Ln x) = chainRule Ln x
+diffH (Neg x) = Neg (diffH x)
 
 chainRule :: (Expr String -> Expr String) -> Expr String -> Expr String
 chainRule op x =
@@ -189,24 +200,43 @@ identity (Div x (Val 1)) = x
 identity x = x
 
 zero :: Expr String -> Expr String
--- zero orig@(Add (Val a) (Val b))
---   | a == (- b) = Val 0
---   | otherwise = orig --- Should we replace -1.0 with Negate 1.0 so we dont have to use vals??
+zero (Add x (Neg y)) = if x == y then Val 0 else Add x (Neg y)
 zero (Sub x y) = if x == y then Val 0 else Sub x y
 zero (Mult _ (Val 0)) = Val 0
 zero orig@(Mult (Val 0) _) = (zero . commute) orig
 zero (Div (Val 0) _) = Val 0
 zero (Ln (Val 1)) = Val 0
+zero (Neg (Val 0)) = Val 0
 zero x = x
 
+typedOp :: (Float -> Float -> Float) -> Float -> Float -> Expr String
+typedOp op a b = if a `op` b >= 0 then Val (a `op` b) else Neg (Val (abs (a `op` b)))
+
 constants :: Expr String -> Expr String
-constants (Add (Val a) (Val b)) = Val (a + b)
-constants (Sub (Val a) (Val b)) = Val (a - b)
-constants (Mult (Val a) (Val b)) = Val (a * b)
-constants (Div (Val a) (Val b)) = Val (a / b)
-constants (Pow (Val a) (Val b)) = Val (a ** b)
-constants (E (Val a)) = Val (exp a)
-constants (Ln (Val a)) = Val (log a)
+constants (Add (Val a) (Val b)) = typedOp (+) a b
+constants (Add (Val a) (Neg (Val b))) = typedOp (+) a (- b)
+constants orig@(Add (Neg (Val _)) (Val _)) = constants (commute orig)
+constants (Add (Neg (Val a)) (Neg (Val b))) = typedOp (+) (- a) (- b)
+constants (Sub (Val a) (Val b)) = typedOp (-) a b
+constants (Sub (Val a) (Neg (Val b))) = typedOp (-) a (- b)
+constants orig@(Sub (Neg (Val _)) (Val _)) = constants (commute orig)
+constants (Sub (Neg (Val a)) (Neg (Val b))) = typedOp (-) (- a) (- b)
+constants (Mult (Val a) (Val b)) = typedOp (*) a b
+constants (Mult (Val a) (Neg (Val b))) = typedOp (*) a (- b)
+constants orig@(Mult (Neg (Val _)) (Val _)) = constants (commute orig)
+constants (Mult (Neg (Val a)) (Neg (Val b))) = typedOp (*) (- a) (- b)
+constants (Div (Val a) (Val b)) = typedOp (/) a b
+constants (Div (Val a) (Neg (Val b))) = typedOp (/) a (- b)
+constants orig@(Div (Neg (Val _)) (Val _)) = constants (commute orig)
+constants (Div (Neg (Val a)) (Neg (Val b))) = typedOp (/) (- a) (- b)
+constants (Pow (Val a) (Val b)) = typedOp (**) a b
+constants (Pow (Val a) (Neg (Val b))) = typedOp (**) a (- b)
+constants orig@(Pow (Neg (Val _)) (Val _)) = constants (commute orig)
+constants (Pow (Neg (Val a)) (Neg (Val b))) = typedOp (**) (- a) (- b)
+constants (E (Val a)) = if exp a >= 0 then Val (exp a) else Neg (Val (exp a))
+constants (E (Neg (Val b))) = if exp (- b) >= 0 then Val (exp (- b)) else Neg (Val (exp (- b)))
+constants (Ln (Val a)) = if log a >= 0 then Val (log a) else Neg (Val (log a))
+constants (Ln (Neg (Val b))) = if log (- b) >= 0 then Val (log (- b)) else Neg (Val (log (- b)))
 constants x = x
 
 inverse :: Expr String -> Expr String
@@ -216,9 +246,9 @@ inverse (Sub (Add x y) z)
   | x == z = y
   | y == z = x
   | otherwise = Sub (Add x y) z
-inverse orig@(Sub (Val a) (Add (Val b) (Val c))) -- same negate issue as above so only vals here
-  | (- b) == a = Val (- c)
-  | (- c) == a = Val (- b)
+inverse orig@(Sub z (Add x y))
+  | x == z = Neg y
+  | y == z = Neg x
   | otherwise = orig
 inverse (Mult (Div x y) z) = if y == z then x else Mult (Div x y) z
 inverse orig@(Mult _ (Div _ _)) = (inverse . commute) orig
@@ -226,7 +256,7 @@ inverse (Div (Mult x y) z)
   | x == z = y
   | y == z = x
   | otherwise = Div (Mult x y) z
-inverse orig@(Div z (Mult x y)) -- same negate issue as above so only vals here
+inverse orig@(Div z (Mult x y))
   | x == z = Div (Val 1) y
   | y == z = Div (Val 1) x
   | otherwise = orig
@@ -235,6 +265,7 @@ inverse (Div x y)
   | otherwise = Div x y
 inverse (E (Ln x)) = x
 inverse (Ln (E x)) = x
+inverse (Neg (Neg x)) = x
 inverse x = x
 
 groupBases :: Expr String -> Expr String
@@ -304,15 +335,20 @@ integrateH (Mult (Val a) x) wrt = Mult (Val a) (integrateH x wrt)
 integrateH orig@(Mult _ (Val _)) wrt = integrateH (commute orig) wrt
 integrateH (Mult x y) wrt = integrateByParts x y wrt
 integrateH (Div x y) _ = if diff y == x then y else error "no implemented"
-integrateH (Pow (Var x) (Val a)) _ = Div (Pow (Var x) (Add (Val a) (Val 1))) (Add (Val a) (Val 1)) -- normal integration rule
+integrateH orig@(Pow (Var _) (Val _)) wrt = powerRule orig wrt
+integrateH orig@(Pow (Var _) (Neg (Val _))) wrt = powerRule orig wrt
 integrateH (Pow (Val a) (Var x)) _ = Div (Pow (Val a) (Var x)) (Ln (Val a)) -- 2^x -> 2^x / ln2
 integrateH (E (Val a)) wrt = Mult (E (Val a)) (Var wrt) -- e*2 -> x * e^2
 integrateH (E (Var l)) wrt = if l == wrt then E (Var l) else Mult (Var wrt) (E (Var l))
 integrateH (E x) wrt = integrateBySubstitution E x wrt
 integrateH (Ln (Val a)) wrt = Mult (Ln (Val a)) (Var wrt) -- ln2 -> x * ln2
 integrateH (Ln x) wrt = integrateByParts (Ln x) (Val 1) wrt
+integrateH (Neg x) wrt = Neg (integrateH x wrt)
 integrateH (Var x) wrt = integrateH (Pow (Var x) (Val 1)) wrt -- x -> x^1 then integrate
 integrateH (Val a) wrt = Mult (Val a) (Var wrt) -- add variable we're integrated wrt
+
+powerRule :: Expr String -> String -> Expr String
+powerRule (Pow (Var x) power) _ = Div (Pow (Var x) (Add power (Val 1))) (Add power (Val 1)) -- normal integration rule
 
 integrateBySubstitution :: (Expr String -> Expr String) -> Expr String -> String -> Expr String
 integrateBySubstitution f x wrt =

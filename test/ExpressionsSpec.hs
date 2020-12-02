@@ -41,6 +41,8 @@ inverseOpSpec =
       inverseOp (E (Var "x")) (Var "u") "x" `shouldBe` (Var "x", Ln (Var "u"))
     it "cancels out Ln" $ do
       inverseOp (Ln (Var "x")) (Var "u") "x" `shouldBe` (Var "x", E (Var "u"))
+    it "cancels out Negate" $ do
+      inverseOp (Neg (Var "x")) (Var "u") "x" `shouldBe` (Var "x", Neg (Var "u"))
 
 solveForSpec :: Spec
 solveForSpec =
@@ -49,6 +51,7 @@ solveForSpec =
       solveFor (Add (Sub (Var "x") (Var "y")) (Var "z")) (Val 1) "x" `shouldBe` Add (Sub (Val 1) (Var "z")) (Var "y")
       solveFor (Add (Sub (Var "x") (Var "y")) (Var "z")) (Val 1) "z" `shouldBe` Sub (Val 1) (Sub (Var "x") (Var "y"))
       solveFor (Pow (Sub (Var "x") (Var "y")) (Var "z")) (Val 1) "z" `shouldBe` Div (Ln (Val 1)) (Ln (Sub (Var "x") (Var "y")))
+      solveFor (Neg (Mult (Var "x") (Var "y"))) (Val 1) "y" `shouldBe` Div (Neg (Val 1)) (Var "x")
 
 evalSpec :: Spec
 evalSpec =
@@ -82,6 +85,9 @@ evalSpec =
       it "evaluates" $
         eval (E (Val 1)) [] `shouldBe` exp 1
     describe "Ln" $
+      it "evaluates" $
+        eval (Ln (Val 1)) [] `shouldBe` log 1
+    describe "Neg" $
       it "evaluates" $
         eval (Ln (Val 1)) [] `shouldBe` log 1
     describe "Var" $ do
@@ -126,7 +132,7 @@ diffSpec =
     describe "Div" $ do
       it "follows the product + chain rule" $
         let lhs = Pow (Ln (Var "x")) (Val (-1))
-            rhs = Mult (Val (-1)) (Pow (Ln (Var "x")) (Val (-2)))
+            rhs = Mult (Val (-1)) (Pow (Ln (Var "x")) (Neg (Val 2)))
          in diff (Div (Var "x") (Ln (Var "x"))) `shouldBe` Add lhs rhs
       it "gets the same value as the quotient rule" $
         let quotientRule (Div x y) = Div (Sub (Mult y (diff x)) (Mult x (diff y))) (Pow y (Val 2))
@@ -152,6 +158,9 @@ diffSpec =
         diff (Ln (Var "x")) `shouldBe` Div (Val 1) (Var "x")
       it "multiples E by the differential of the logarithm" $
         diff (Ln (Mult (Val 2) (Var "x"))) `shouldBe` Div (Val 1) (Var "x")
+    describe "Neg" $ do
+      it "differentiates the operand" $
+        diff (Neg (Var "x")) `shouldBe` Neg (Val 1)
     describe "Chain Rule" $
       it "applies chain rule: d/dx f(g(x)) = f'(g(x)) * g'(x)" $
         diff (Ln (Pow (Var "x") (Val 2))) `shouldBe` Div (Mult (Val 2) (Var "x")) (Pow (Var "x") (Val 2))
@@ -162,7 +171,7 @@ integrateSpec =
     describe "Val" $
       it "multiplies by variable wrt" $ do
         integrateH (Val 1) "x" `shouldBe` Mult (Val 1) (Var "x")
-        integrateH (Val (-1)) "x" `shouldBe` Mult (Val (-1)) (Var "x")
+        integrateH (Val 0) "x" `shouldBe` Mult (Val 0) (Var "x")
         integrateH (Val 2) "y" `shouldBe` Mult (Val 2) (Var "y")
     describe "Var" $
       it "increments the power and divides by the new power" $
@@ -173,7 +182,7 @@ integrateSpec =
       it "x^a increments the power and divides by the new power" $ do
         integrateH (Pow (Var "x") (Val 2)) "x" `shouldBe` Div (Pow (Var "x") (Add (Val 2) (Val 1))) (Add (Val 2) (Val 1))
         integrateH (Pow (Var "x") (Val 0.5)) "x" `shouldBe` Div (Pow (Var "x") (Add (Val 0.5) (Val 1))) (Add (Val 0.5) (Val 1))
-        integrateH (Pow (Var "x") (Val (-0.5))) "x" `shouldBe` Div (Pow (Var "x") (Add (Val (-0.5)) (Val 1))) (Add (Val (-0.5)) (Val 1))
+        integrateH (Pow (Var "x") (Neg (Val (0.5)))) "x" `shouldBe` Div (Pow (Var "x") (Add (Neg (Val 0.5)) (Val 1))) (Add (Neg (Val 0.5)) (Val 1))
     describe "Add" $
       it "integrates the individual operands" $
         integrateH (Add (Val 1) (Val 2)) "x" `shouldBe` Add (Mult (Val 1) (Var "x")) (Mult (Val 2) (Var "x"))
@@ -198,6 +207,9 @@ integrateSpec =
           `shouldBe` Sub
             (Mult (Ln (Mult (Val 2) (Var "x"))) (Var "x"))
             (Mult (Val 1) (Var "x"))
+    describe "Neg" $
+      it "integrates the operand of Neg" $
+        integrateH (Neg (Val 2)) "x" `shouldBe` Neg (Mult (Val 2) (Var "x"))
 
 simplifySpec :: Spec
 simplifySpec =
@@ -220,7 +232,8 @@ simplifySpec =
           y = Val 2
        in it "recognises constants to pair up" $ do
             constants (Add x y) `shouldBe` Val 3
-            constants (Sub x y) `shouldBe` Val (-1)
+            constants (Sub x y) `shouldBe` Neg (Val 1)
+            constants (Sub y x) `shouldBe` Val 1
             constants (Mult x y) `shouldBe` Val 2
             constants (Div x y) `shouldBe` Val 0.5
             constants (Pow x y) `shouldBe` Val 1
@@ -229,11 +242,12 @@ simplifySpec =
     describe "inverse" $
       it "recognises inverses to cancel" $ do
         inverse (Add (Sub (Var "x") (Val 0.0)) (Val 0.0)) `shouldBe` Var "x"
-        inverse (Sub (Add (Var "x") (Val 0.0)) (Val 0.0)) `shouldBe` Var "x"
+        inverse (Sub (Add (Var "x") (Val 1.0)) (Val 1.0)) `shouldBe` Var "x"
         inverse (Mult (Div (Var "x") (Var "y")) (Var "y")) `shouldBe` Var "x"
         inverse (Div (Mult (Var "x") (Var "y")) (Var "y")) `shouldBe` Var "x"
         inverse (E (Ln (Var "x"))) `shouldBe` Var "x"
         inverse (Ln (E (Var "x"))) `shouldBe` Var "x"
+        inverse (Neg (Neg (Var "x"))) `shouldBe` Var "x"
     describe "groupExpr" $
       let x = Pow (Var "x") (Val 2)
        in it "recognises exprs to group" $ do
@@ -289,7 +303,8 @@ expressions =
       Div <$> valExpressions <*> nonZeroValExpression,
       Pow <$> valExpressions <*> smallIntValExpression,
       E <$> valExpressions,
-      Ln <$> nonZeroValExpression
+      Ln <$> nonZeroValExpression,
+      Neg <$> valExpressions
     ]
 
 unlikelyToNaNExpressions :: Gen (Expr String)

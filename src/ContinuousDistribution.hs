@@ -11,21 +11,21 @@ module ContinuousDistribution
   )
 where
 
-import Expressions (Expr (..), eval, integrateWithin)
+import Expressions (Expr (..), eval, integrateWithin, typedOp)
 
 data ContinuousDist = Exp Float | Unif Float Float | Norm Float Float | Custom (Expr String) Float Float
 
 exponentialPDF :: Float -> Expr String
-exponentialPDF la = Mult (Val la) (E (Mult (Val (- la)) (Var "x")))
+exponentialPDF la = Mult (Val la) (E (Mult (Neg (Val la)) (Var "x")))
 
 uniformPDF :: Float -> Float -> Expr String
-uniformPDF a b = Val (1 / (b - a))
+uniformPDF a b = typedOp (/) 1 (b - a)
 
 normalPDF :: Float -> Float -> Expr String
 normalPDF m v = Div numerator denominator
   where
     exponentVar = Pow (Div (Sub (Var "x") (Val m)) (Val (sqrt v))) (Val 2)
-    numerator = E (Mult (Val (-0.5)) exponentVar)
+    numerator = E (Mult (Neg (Val 0.5)) exponentVar)
     denominator = Val (sqrt v * sqrt (2 * pi))
 
 pdf :: ContinuousDist -> Expr String
