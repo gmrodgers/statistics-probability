@@ -225,9 +225,9 @@ inverse (Div (Mult x y) z)
   | x == z = y
   | y == z = x
   | otherwise = Div (Mult x y) z
-inverse orig@(Div (Val a) (Mult (Val b) (Val c))) -- same negate issue as above so only vals here
-  | (- b) == a = Val (- c)
-  | (- c) == a = Val (- b)
+inverse orig@(Div z (Mult x y)) -- same negate issue as above so only vals here
+  | x == z = Div (Val 1) y
+  | y == z = Div (Val 1) x
   | otherwise = orig
 inverse (Div x y)
   | x == y = Val 1
@@ -309,7 +309,9 @@ integrateH (Ln (Val a)) wrt = Mult (Ln (Val a)) (Var wrt) -- ln2 -> x * ln2
 integrateH (Ln x) wrt =
   let u = Ln x
       dv = Val 1
-   in Sub (Mult u (integrateH dv wrt)) (integrateH (simplify (Mult (diff u) dv)) wrt)
+      v = integrateH dv wrt
+      du = diff u
+   in Sub (simplify (Mult u v)) (integrateH (simplify (Mult v du)) wrt)
 integrateH (Var x) wrt = integrateH (Pow (Var x) (Val 1)) wrt -- x -> x^1 then integrate
 integrateH (Val a) wrt = Mult (Val a) (Var wrt) -- add variable we're integrated wrt
 

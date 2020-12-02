@@ -146,7 +146,7 @@ diffSpec =
       it "divides the differential of the operand by the operand" $
         diff (Ln (Var "x")) `shouldBe` Div (Val 1) (Var "x")
       it "multiples E by the differential of the logarithm" $
-        diff (Ln (Mult (Val 2) (Var "x"))) `shouldBe` Div (Val 2) (Mult (Val 2) (Var "x"))
+        diff (Ln (Mult (Val 2) (Var "x"))) `shouldBe` Div (Val 1) (Var "x")
     describe "Chain Rule" $
       it "applies chain rule: d/dx f(g(x)) = f'(g(x)) * g'(x)" $
         diff (Ln (Pow (Var "x") (Val 2))) `shouldBe` Div (Mult (Val 2) (Var "x")) (Pow (Var "x") (Val 2))
@@ -187,8 +187,8 @@ integrateSpec =
         integrateH (Ln (Val 2)) "x" `shouldBe` Mult (Ln (Val 2)) (Var "x")
       it "can do integration by parts" $
         integrateH (Ln (Var "x")) "x"
-          `shouldBe` Sub (Mult (Ln (Var "x")) (Mult (Val 1) (Var "x"))) (Var "x")
-      xit "can use substitution for complicated logarithms" $
+          `shouldBe` Sub (Mult (Ln (Var "x")) (Mult (Val 1) (Var "x"))) (Mult (Val 1) (Var "x"))
+      it "can use substitution for complicated logarithms" $
         integrateH (Ln (Mult (Val 2) (Var "x"))) "x"
           `shouldBe` Sub
             (Mult (Ln (Mult (Val 2) (Var "x"))) (Mult (Val 1) (Var "x")))
