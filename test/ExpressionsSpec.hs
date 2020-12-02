@@ -187,11 +187,11 @@ integrateSpec =
         integrateH (Ln (Val 2)) "x" `shouldBe` Mult (Ln (Val 2)) (Var "x")
       it "can do integration by parts" $
         integrateH (Ln (Var "x")) "x"
-          `shouldBe` Sub (Mult (Ln (Var "x")) (Mult (Val 1) (Var "x"))) (Mult (Val 1) (Var "x"))
+          `shouldBe` Sub (Mult (Ln (Var "x")) (Var "x")) (Mult (Val 1) (Var "x"))
       it "can use substitution for complicated logarithms" $
         integrateH (Ln (Mult (Val 2) (Var "x"))) "x"
           `shouldBe` Sub
-            (Mult (Ln (Mult (Val 2) (Var "x"))) (Mult (Val 1) (Var "x")))
+            (Mult (Ln (Mult (Val 2) (Var "x"))) (Var "x"))
             (Mult (Val 1) (Var "x"))
 
 identitySpec :: Spec

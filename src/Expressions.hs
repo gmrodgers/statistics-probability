@@ -298,7 +298,7 @@ integrateH (Add x y) wrt = Add (integrateH x wrt) (integrateH y wrt) -- Integrat
 integrateH (Sub x y) wrt = Sub (integrateH x wrt) (integrateH y wrt) -- Integrate down the tree
 integrateH (Mult (Val a) x) wrt = Mult (Val a) (integrateH x wrt)
 integrateH orig@(Mult _ (Val _)) wrt = integrateH (commute orig) wrt
-integrateH (Mult u v) wrt = Sub (Mult u (integrateH v wrt)) (integrateH (Mult (diff u) v) wrt)
+integrateH (Mult u v) wrt = integrateByParts u v wrt
 integrateH (Div x y) _ = if diff y == x then y else error "no implemented"
 integrateH (Pow (Var x) (Val a)) _ = Div (Pow (Var x) (Add (Val a) (Val 1))) (Add (Val a) (Val 1)) -- normal integration rule
 integrateH (Pow (Val a) (Var x)) _ = Div (Pow (Val a) (Var x)) (Ln (Val a)) -- 2^x -> 2^x / ln2
@@ -306,12 +306,7 @@ integrateH (E (Val a)) wrt = Mult (E (Val a)) (Var wrt) -- e*2 -> x * e^2
 integrateH (E (Var l)) wrt = if l == wrt then E (Var l) else Mult (Var wrt) (E (Var l))
 integrateH (E x) wrt = integrateBySubstitution E x wrt
 integrateH (Ln (Val a)) wrt = Mult (Ln (Val a)) (Var wrt) -- ln2 -> x * ln2
-integrateH (Ln x) wrt =
-  let u = Ln x
-      dv = Val 1
-      v = integrateH dv wrt
-      du = diff u
-   in Sub (simplify (Mult u v)) (integrateH (simplify (Mult v du)) wrt)
+integrateH (Ln x) wrt = integrateByParts (Ln x) (Val 1) wrt
 integrateH (Var x) wrt = integrateH (Pow (Var x) (Val 1)) wrt -- x -> x^1 then integrate
 integrateH (Val a) wrt = Mult (Val a) (Var wrt) -- add variable we're integrated wrt
 
@@ -321,6 +316,12 @@ integrateBySubstitution f x wrt =
       solvedX = solveFor x u wrt
       solvedDX = solveFor (Mult (Var "dx") (diff x)) (Val 1) "dx"
    in substitute ("u", x) (Mult (substitute ("x", solvedX) solvedDX) (integrateH (f u) "u"))
+
+integrateByParts :: Expr String -> Expr String -> String -> Expr String
+integrateByParts u dv wrt =
+  let du = diff u
+      v = integrateH dv wrt
+   in Sub (Mult u v) (integrateH (Mult du v) wrt)
 
 integrate :: Expr String -> String -> Expr String
 integrate x wrt = Add (simplify $ integrateH x wrt) (Var "C")
