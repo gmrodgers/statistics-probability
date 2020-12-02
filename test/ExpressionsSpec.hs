@@ -17,15 +17,7 @@ mainSpec =
       evalSpec
       diffSpec
       integrateSpec
-      identitySpec
-      zeroSpec
-      constantsSpec
-      inverseSpec
-      groupExprSpec
-      groupBasesSpec
-      unnecessaryOneSpec
-      varToPowSpec
-      powToVarSpec
+      simplifySpec
 
 inverseOpSpec :: Spec
 inverseOpSpec =
@@ -207,134 +199,84 @@ integrateSpec =
             (Mult (Ln (Mult (Val 2) (Var "x"))) (Var "x"))
             (Mult (Val 1) (Var "x"))
 
-identitySpec :: Spec
-identitySpec =
-  describe "identity" $
-    it "recognises identity parameter for expr" $
-      let isExprOrOperand expr x y = identity expr == x || identity expr == y || identity expr == expr
-
-          prop_returnsSame expr@(Add x y) = isExprOrOperand expr x y
-          prop_returnsSame expr@(Sub x y) = isExprOrOperand expr x y
-          prop_returnsSame expr@(Mult x y) = isExprOrOperand expr x y
-          prop_returnsSame expr@(Div x y) = isExprOrOperand expr x y
-          prop_returnsSame expr = identity expr == expr
-       in property $ forAll expressions prop_returnsSame
-
-zeroSpec :: Spec
-zeroSpec =
-  describe "zero" $
-    it "recognises zeroer parameter for expr" $
-      let prop_returnsZero expr = zero expr == expr || zero expr == Val 0
-       in property $ forAll expressions prop_returnsZero
-
-constantsSpec :: Spec
-constantsSpec =
-  describe "constants" $ do
-    it "recognises constants to pair up" $
-      let prop_returnsFunctionOF expr@(Add (Val x) (Val y)) = constants expr == Val (x + y)
-          prop_returnsFunctionOF expr@(Sub (Val x) (Val y)) = constants expr == Val (x - y)
-          prop_returnsFunctionOF expr@(Mult (Val x) (Val y)) = constants expr == Val (x * y)
-          prop_returnsFunctionOF expr@(Div (Val x) (Val y)) = constants expr == Val (x / y)
-          prop_returnsFunctionOF expr@(Pow (Val x) (Val y)) = constants expr == Val (x ** y)
-          prop_returnsFunctionOF expr@(E (Val y)) = constants expr == Val (exp y)
-          prop_returnsFunctionOF expr@(Ln (Val y)) = constants expr == Val (log y)
-          prop_returnsFunctionOF x = constants x == x
-       in property $ forAll expressions prop_returnsFunctionOF
-
-inverseSpec :: Spec
-inverseSpec =
-  describe "inverse" $ do
-    it "recognises inverses to cancel" $
-      let isExprOrInverse expr x y = inverse expr == x || inverse expr == y
-          inversePairExpressions =
-            let x = Val <$> arbitrary
-                y = Var <$> arbitrary
-                f1 x a = x <$> a
-                f2 x a b = x <$> a <*> b
-             in [ f2 Add x (f2 Sub y x),
-                  f2 Add (f2 Sub y x) x,
-                  f2 Sub (f2 Add y x) x,
-                  f2 Mult (f2 Div y x) x,
-                  f2 Mult x (f2 Div y x),
-                  f2 Div (f2 Mult y x) x,
-                  f1 Ln (f1 E x),
-                  f1 E (f1 Ln x)
-                ]
-
-          prop_returnsInverseCancelledOut expr@(Add x y) = isExprOrInverse expr x y
-          prop_returnsInverseCancelledOut expr@(Sub x y) = isExprOrInverse expr x y
-          prop_returnsInverseCancelledOut expr@(Mult x y) = isExprOrInverse expr x y
-          prop_returnsInverseCancelledOut expr@(Div x y) = isExprOrInverse expr x y
-          prop_returnsInverseCancelledOut expr@(E x) = isExprOrInverse expr x x
-          prop_returnsInverseCancelledOut expr@(Ln x) = isExprOrInverse expr x x
-          prop_returnsInverseCancelledOut x = inverse x == x
-       in verboseCheck $ forAll (oneof (expressions : inversePairExpressions)) prop_returnsInverseCancelledOut
-
-groupExprSpec :: Spec
-groupExprSpec =
-  describe "groupExpr" $ do
-    it "recognises exprs to group" $
-      let prop_isConstantByExpr expr = case groupExpr expr of
-            Mult (Val _) _ -> True
-            Val 2 -> True
-            Val 0 -> True
-            _ -> groupExpr expr == expr
-          inversePairExpressions =
-            let x = Val <$> arbitrary
-                y = expressions
-                f2 f a b = f <$> a <*> b
-             in [ f2 Add x (f2 Mult y x),
-                  f2 Add (f2 Mult y x) x,
-                  f2 Sub (f2 Mult y x) x,
-                  f2 Sub x (f2 Mult y x)
-                ]
-       in verboseCheck $ forAll (oneof (expressions : inversePairExpressions)) prop_isConstantByExpr
-
-groupBasesSpec :: Spec
-groupBasesSpec =
-  describe "groupBases" $ do
-    it "recognises bases to group" $
-      let prop_isPowMultiple expr = case groupBases expr of
-            Pow _ _ -> True
-            Mult _ (Pow _ _) -> True
-            _ -> groupBases expr == expr
-          inversePairExpressions =
-            let base = expressions
-                x = Pow <$> base <*> expressions
-                y = Pow <$> base <*> expressions
-
-                f2 f a b = f <$> a <*> b
-             in [ f2 Mult x y,
-                  f2 Div x y,
-                  f2 Mult x (f2 Mult y expressions),
-                  f2 Div x (f2 Mult y expressions)
-                ]
-       in verboseCheck $ forAll (oneof (expressions : inversePairExpressions)) prop_isPowMultiple
-
-unnecessaryOneSpec :: Spec
-unnecessaryOneSpec =
-  describe "unnecessaryOneSpec" $ do
-    it "removes (Val 1) from Mult/Div combos" $
-      let prop_isOneMultOrDivExpr orig@(Mult (Div (Val 1) y) z) = unnecessaryOne orig == Div z y
-          prop_isOneMultOrDivExpr orig@(Mult z (Div (Val 1) y)) = unnecessaryOne orig == Div z y
-          prop_isOneMultOrDivExpr x = unnecessaryOne x == x
-       in verboseCheck $ forAll expressions prop_isOneMultOrDivExpr
-
-varToPowSpec :: Spec
-varToPowSpec =
-  describe "varToPow" $ do
-    it "changes any Var x to a Pow x 1" $
-      let prop_isNowPow (Var x) = varToPow (Var x) == Pow (Var x) (Val 1)
-          prop_isNowPow x = varToPow x == x
-       in verboseCheck $ forAll expressions prop_isNowPow
-
-powToVarSpec :: Spec
-powToVarSpec =
-  describe "powToVar" $ do
-    it "changes any Pow x 1 to Var x" $
-      let prop_isNowVar (Pow (Var x) (Val 1)) = powToVar (Pow (Var x) (Val 1)) == Var x
-          prop_isNowVar x = powToVar x == x
-       in verboseCheck $ forAll expressions prop_isNowVar
+simplifySpec :: Spec
+simplifySpec =
+  describe "simplify constituent functions" $ do
+    describe "identity" $
+      it "recognises identity parameter for expr" $
+        let isExprOrOperand expr x y = identity expr == x || identity expr == y || identity expr == expr
+            prop_returnsSame expr@(Add x y) = isExprOrOperand expr x y
+            prop_returnsSame expr@(Sub x y) = isExprOrOperand expr x y
+            prop_returnsSame expr@(Mult x y) = isExprOrOperand expr x y
+            prop_returnsSame expr@(Div x y) = isExprOrOperand expr x y
+            prop_returnsSame expr = identity expr == expr
+         in property $ forAll expressions prop_returnsSame
+    describe "zero" $
+      it "recognises zeroer parameter for expr" $
+        let prop_returnsZero expr = zero expr == expr || zero expr == Val 0
+         in property $ forAll expressions prop_returnsZero
+    describe "constants" $
+      let x = Val 1
+          y = Val 2
+       in it "recognises constants to pair up" $ do
+            constants (Add x y) `shouldBe` Val 3
+            constants (Sub x y) `shouldBe` Val (-1)
+            constants (Mult x y) `shouldBe` Val 2
+            constants (Div x y) `shouldBe` Val 0.5
+            constants (Pow x y) `shouldBe` Val 1
+            constants (E x) `shouldBe` Val (exp 1)
+            constants (Ln x) `shouldBe` Val (log 1)
+    describe "inverse" $
+      it "recognises inverses to cancel" $ do
+        inverse (Add (Sub (Var "x") (Val 0.0)) (Val 0.0)) `shouldBe` Var "x"
+        inverse (Sub (Add (Var "x") (Val 0.0)) (Val 0.0)) `shouldBe` Var "x"
+        inverse (Mult (Div (Var "x") (Var "y")) (Var "y")) `shouldBe` Var "x"
+        inverse (Div (Mult (Var "x") (Var "y")) (Var "y")) `shouldBe` Var "x"
+        inverse (E (Ln (Var "x"))) `shouldBe` Var "x"
+        inverse (Ln (E (Var "x"))) `shouldBe` Var "x"
+    describe "groupExpr" $
+      let x = Pow (Var "x") (Val 2)
+       in it "recognises exprs to group" $ do
+            groupExpr (Add (Mult (Val 1) x) (Mult (Val 2) x)) `shouldBe` Mult (Val 3) x
+            groupExpr (Add x (Mult (Val 1) x)) `shouldBe` Mult (Val 2) x
+            groupExpr (Sub (Mult (Val 1) x) (Mult (Val 2) x)) `shouldBe` Mult (Val (-1)) x
+            groupExpr (Sub x (Mult (Val 1) x)) `shouldBe` Mult x (Val 0)
+    describe "groupBases" $
+      it "recognises bases to group" $
+        let prop_isPowMultiple expr = case groupBases expr of
+              Pow _ _ -> True
+              Mult _ (Pow _ _) -> True
+              _ -> groupBases expr == expr
+            inversePairExpressions =
+              let base = expressions
+                  x = Pow <$> base <*> expressions
+                  y = Pow <$> base <*> expressions
+                  f2 f a b = f <$> a <*> b
+               in [ f2 Mult x y,
+                    f2 Div x y,
+                    f2 Mult x (f2 Mult y expressions),
+                    f2 Div x (f2 Mult y expressions)
+                  ]
+         in property $ forAll (oneof (expressions : inversePairExpressions)) prop_isPowMultiple
+    describe "unnecessaryOneSpec" $ do
+      it "removes (Val 1) from Mult/Div combos" $
+        let prop_isOneMultOrDivExpr orig@(Mult (Div (Val 1) y) z) = unnecessaryOne orig == Div z y
+            prop_isOneMultOrDivExpr orig@(Mult z (Div (Val 1) y)) = unnecessaryOne orig == Div z y
+            prop_isOneMultOrDivExpr x = unnecessaryOne x == x
+         in property $ forAll expressions prop_isOneMultOrDivExpr
+      describe "varToPow" $
+        it "changes any Var x to a Pow x 1" $
+          let prop_isNowPow (Var x) = varToPow (Var x) == Pow (Var x) (Val 1)
+              prop_isNowPow x = varToPow x == x
+           in property $ forAll expressions prop_isNowPow
+      describe "powToVar" $
+        it "changes any Pow x 1 to Var x" $
+          let prop_isNowVar (Pow (Var x) (Val 1)) = powToVar (Pow (Var x) (Val 1)) == Var x
+              prop_isNowVar x = powToVar x == x
+           in property $ forAll expressions prop_isNowVar
+    describe "simplify" $ do
+      it "combines all the consituent functions and applys to whole expr tree" $
+        simplify (Sub (Mult (Var "z") (Var "z")) (Mult (Val 1) (Add (Val 1) (Val 3)))) `shouldBe` Sub (Pow (Var "z") (Val 2)) (Val 4)
 
 -- GENERATORS FOR QUICKCHECK TESTS
 

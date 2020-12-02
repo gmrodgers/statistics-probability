@@ -248,6 +248,9 @@ groupBases orig@(Mult x (Mult a y))
   | x == y = Mult a (Pow x (Val 2))
   | otherwise = orig
 groupBases orig@(Mult (Mult _ _) _) = (groupBases . commute) orig
+groupBases orig@(Mult x y)
+  | x == y = Pow x (Val 2)
+  | otherwise = orig
 groupBases orig@(Div (Pow x z1) (Pow y z2))
   | x == y = Pow x (Sub z1 z2)
   | otherwise = orig
