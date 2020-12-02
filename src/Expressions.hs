@@ -131,6 +131,7 @@ inverseOp (Ln x) base wrt
   | not (containsVar x wrt) = error "i cant handle no wrt variables in either branch"
   | containsVar x wrt = (x, E base)
 
+solveFor :: Expr String -> Expr String -> String -> Expr String
 solveFor x y v = solveFor' v (x, y)
   where
     solveFor' :: String -> (Expr String, Expr String) -> Expr String
@@ -161,7 +162,7 @@ diffH :: Expr String -> Expr String
 diffH (Add x y) = Add (diffH x) (diffH y) -- Addition Rule
 diffH (Sub x y) = Sub (diffH x) (diffH y) -- Subtraction Rule
 diffH (Mult x y) = Add (Mult (diffH x) y) (Mult (diffH y) x) -- Product Rule
-diffH (Div x y) = Div (Sub (Mult (diffH x) y) (Mult (diffH y) x)) (Pow y (Val 2)) -- Quotient Rule
+diffH (Div x y) = diffH (Mult x (Pow y (Val (-1)))) -- Quotient rule via Product + Chain
 diffH (Var _) = Val 1 -- Unitary Power
 diffH (Val _) = Val 0 -- Constant
 diffH (Pow (Var l) (Val a)) = Mult (Val a) (Pow (Var l) (Sub (Val a) (Val 1))) -- Power Rule

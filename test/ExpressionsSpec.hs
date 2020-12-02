@@ -131,11 +131,24 @@ diffSpec =
       it "follows the product rule: d/dx f(x)h(x) = f'(x)h(x) + f(x)h'(x)" $ do
         diff (Mult (Val 2) (Var "x")) `shouldBe` Val 2
         diff (Mult (Var "x") (Ln (Var "x"))) `shouldBe` Add (Ln (Var "x")) (Val 1)
-    describe "Div" $
-      it "follows the quotient rule: d/dx f(x)/h(x) = [h(x)f'(x) - f(x)h'(x)] / h(x)^2" $
-        let numerator = Sub (Ln (Var "x")) (Val 1)
-            denominator = Pow (Ln (Var "x")) (Val 2)
-         in diff (Div (Var "x") (Ln (Var "x"))) `shouldBe` Div numerator denominator
+    describe "Div" $ do
+      it "follows the product + chain rule" $
+        let lhs = Pow (Ln (Var "x")) (Val (-1))
+            rhs = Mult (Val (-1)) (Pow (Ln (Var "x")) (Val (-2)))
+         in diff (Div (Var "x") (Ln (Var "x"))) `shouldBe` Add lhs rhs
+      it "gets the same value as the quotient rule" $
+        let quotientRule (Div x y) = Div (Sub (Mult y (diff x)) (Mult x (diff y))) (Pow y (Val 2))
+            divExpressions = Div <$> unlikelyToNaNExpressions <*> unlikelyToNaNExpressions
+
+            error = 0.01
+            prop_matchesQuotientRuleWithinError n expr =
+              (&&)
+                (diffRes <= (quotientRes + error))
+                (diffRes >= (quotientRes - error))
+              where
+                diffRes = eval (diff expr) [("x", n)]
+                quotientRes = eval (quotientRule expr) [("x", n)]
+         in property $ forAll divExpressions (prop_matchesQuotientRuleWithinError 1)
     describe "E" $
       it "multiples E by the differential of the exponent" $ do
         diff (E (Val 2)) `shouldBe` Val 0
@@ -336,6 +349,21 @@ expressions =
       E <$> valExpressions,
       Ln <$> nonZeroValExpression
     ]
+
+unlikelyToNaNExpressions :: Gen (Expr String)
+unlikelyToNaNExpressions =
+  let smallInt =
+        fmap fromIntegral (arbitrary :: Gen Int)
+          `suchThat` (\a -> 0 < a && a < 10000)
+          `suchThat` (\a -> abs a /= 1)
+   in oneof
+        [ Val <$> smallInt,
+          return (Var "x"),
+          Add (Var "x") <$> (Val <$> smallInt),
+          Sub (Var "x") <$> (Val <$> smallInt),
+          Mult (Var "x") <$> (Val <$> smallInt),
+          Div (Var "x") <$> (Val <$> smallInt)
+        ]
 
 valExpressions :: Gen (Expr a)
 valExpressions = oneof [return (Val 0), return (Val 1), Val <$> arbitrary]
